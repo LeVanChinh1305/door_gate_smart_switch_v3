@@ -21,13 +21,27 @@ static const char *TAG = "APP_TOUCH";
 
 static i2c_master_bus_handle_t g_bus_handle = NULL;
 static i2c_master_dev_handle_t g_dev_handle = NULL;
+static bool g_bIsReady = false;
+
+static void app_touch_Cleanup(void)
+{
+    if (g_dev_handle != NULL) {
+        i2c_master_bus_rm_device(g_dev_handle);
+        g_dev_handle = NULL;
+    }
+    if (g_bus_handle != NULL) {
+        i2c_del_master_bus(g_bus_handle);
+        g_bus_handle = NULL;
+    }
+}
 
 /* ==================== Low-level I2C ==================== */
 
 static esp_err_t app_touch_I2cWrite(const uint8_t *data, size_t len)
 {
     DF_CHECK_NULL_PARAM(data);
-    if (len == 0U || g_dev_handle == NULL) return ESP_ERR_INVALID_ARG;
+    if (len == 0U) return ESP_ERR_INVALID_ARG;
+    if (!g_bIsReady || g_dev_handle == NULL) return ESP_ERR_INVALID_STATE;
     return i2c_master_transmit(g_dev_handle, data, len, DF_TOUCH_TIMEOUT_MS);
 }
 
@@ -36,7 +50,8 @@ static esp_err_t app_touch_I2cWriteRead(const uint8_t *write_buf, size_t write_l
 {
     DF_CHECK_NULL_PARAM(write_buf);
     DF_CHECK_NULL_PARAM(read_buf);
-    if (write_len == 0U || read_len == 0U || g_dev_handle == NULL) return ESP_ERR_INVALID_ARG;
+    if (write_len == 0U || read_len == 0U) return ESP_ERR_INVALID_ARG;
+    if (!g_bIsReady || g_dev_handle == NULL) return ESP_ERR_INVALID_STATE;
     return i2c_master_transmit_receive(g_dev_handle,
                                        write_buf, write_len,
                                        read_buf, read_len,
@@ -82,6 +97,10 @@ esp_err_t app_touch_ReadRegs(uint8_t reg, uint8_t *buf, size_t len)
 
 esp_err_t app_touch_Init(void)
 {
+    if (g_bIsReady) {
+        return ESP_OK;
+    }
+
     i2c_master_bus_config_t bus_cfg = {
         .i2c_port             = DF_TOUCH_I2C_PORT,
         .sda_io_num           = DF_TOUCH_PIN_SDA,
@@ -106,8 +125,11 @@ esp_err_t app_touch_Init(void)
     ret = i2c_master_bus_add_device(g_bus_handle, &dev_cfg, &g_dev_handle);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "i2c_master_bus_add_device failed: %s", esp_err_to_name(ret));
+        app_touch_Cleanup();
         return ret;
     }
+
+    g_bIsReady = true;
 
     // Đợi chip boot
     vTaskDelay(pdMS_TO_TICKS(DF_TOUCH_BOOT_DELAY_MS));
@@ -115,6 +137,8 @@ esp_err_t app_touch_Init(void)
     ret = app_touch_CheckDevice();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "CY8CMBR3108 not found");
+        g_bIsReady = false;
+        app_touch_Cleanup();
         return ret;
     }
 

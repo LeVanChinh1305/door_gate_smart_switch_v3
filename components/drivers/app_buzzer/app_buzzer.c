@@ -28,15 +28,16 @@ esp_err_t app_buzzer_Init(void)
         return ret;
     }
 
-    g_bIsReady = true;
-    
     // Ép tắt còi ngay khi khởi tạo để đảm bảo trạng thái an toàn
-    ret = app_buzzer_Off();
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "Buzzer init OK on GPIO%d", DF_BUZZER_PIN);
+    ret = gpio_set_level(DF_BUZZER_PIN, 0);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to turn buzzer off: %s", esp_err_to_name(ret));
+        return ret;
     }
-    
-    return ret;
+
+    g_bIsReady = true;
+    ESP_LOGI(TAG, "Buzzer init OK on GPIO%d", DF_BUZZER_PIN);
+    return ESP_OK;
 }
 
 esp_err_t app_buzzer_On(void)

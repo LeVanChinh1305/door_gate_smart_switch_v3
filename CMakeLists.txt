@@ -2,5 +2,14 @@
 # CMakeLists in this exact order for cmake to work correctly
 cmake_minimum_required(VERSION 3.16)
 
+set(EXTRA_COMPONENT_DIRS
+	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_buzzer
+	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_header2h
+	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_led
+	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_relay
+	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_touch
+	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_zero_cross
+)
+
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(door_gate_smart_switch_v3)

@@ -97,8 +97,19 @@ esp_err_t app_led_Init(gpio_num_t gpio)
     g_bIsReady = true;
     g_u8Brightness = UINT8_MAX;
 
-    app_led_Clear();
-    app_led_Show();
+    err = app_led_Clear();
+    if (err == ESP_OK) {
+        err = app_led_Show();
+    }
+    if (err != ESP_OK) {
+        g_bIsReady = false;
+        rmt_disable(g_rmt_channel);
+        rmt_del_encoder(g_led_encoder);
+        rmt_del_channel(g_rmt_channel);
+        g_led_encoder = NULL;
+        g_rmt_channel = NULL;
+        return err;
+    }
 
     ESP_LOGI(TAG, "LED driver ready on GPIO%d, %d LED(s)", gpio, DF_LED_COUNT);
     return ESP_OK;
@@ -110,8 +121,10 @@ esp_err_t app_led_Deinit(void)
         return ESP_OK;
     }
 
-    app_led_Clear();
-    app_led_Show();
+    esp_err_t result = app_led_Clear();
+    if (result == ESP_OK) {
+        result = app_led_Show();
+    }
 
     esp_err_t err = rmt_disable(g_rmt_channel);
     if (err != ESP_OK) {
@@ -128,7 +141,7 @@ esp_err_t app_led_Deinit(void)
     }
 
     g_bIsReady = false;
-    return ESP_OK;
+    return result != ESP_OK ? result : err;
 }
 
 esp_err_t app_led_SetPixel(uint8_t led, uint8_t r, uint8_t g, uint8_t b)

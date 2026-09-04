@@ -35,11 +35,17 @@ static esp_err_t app_relay_SetLevel(gpio_num_t gpio, uint32_t level)
  */
 static esp_err_t app_relay_AllOffUnlocked(void)
 {
-    esp_err_t ret = ESP_OK;
-    ret |= app_relay_SetLevel(DF_RELAY_PIN_CLOSE, 0);
-    ret |= app_relay_SetLevel(DF_RELAY_PIN_OPEN, 0);
-    ret |= app_relay_SetLevel(DF_RELAY_PIN_STOP, 0);
-    return (ret == ESP_OK) ? ESP_OK : ESP_FAIL;
+    esp_err_t ret = app_relay_SetLevel(DF_RELAY_PIN_CLOSE, 0);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    ret = app_relay_SetLevel(DF_RELAY_PIN_OPEN, 0);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    return app_relay_SetLevel(DF_RELAY_PIN_STOP, 0);
 }
 
 /* ==================== PUBLIC FUNCTIONS ==================== */
@@ -66,10 +72,13 @@ esp_err_t app_relay_Init(void)
         return ret;
     }
 
-    g_bIsReady = true;
-    
     // Đảm bảo rơ-le tắt an toàn ngay khi khởi động
-    app_relay_AllOffUnlocked();
+    ret = app_relay_AllOffUnlocked();
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    g_bIsReady = true;
 
     ESP_LOGI(TAG, "Relay GPIO init OK (CLOSE=GPIO%d, OPEN=GPIO%d, STOP=GPIO%d)", 
              DF_RELAY_PIN_CLOSE, DF_RELAY_PIN_OPEN, DF_RELAY_PIN_STOP);
@@ -83,12 +92,20 @@ esp_err_t app_relay_ExecuteCmd(e_app_relay_cmd_t cmd)
         return ESP_ERR_INVALID_STATE;
     }
 
-    // BƯỚC 1: Tắt toàn bộ để tránh chập pha
-    app_relay_AllOffUnlocked();
-
-    // BƯỚC 2: Nếu là lệnh ALL_OFF thì thoát luôn
+    // BƯỚC 1: Nếu là lệnh ALL_OFF thì chỉ tắt toàn bộ
     if (cmd == E_RELAY_CMD_ALL_OFF) {
-        return ESP_OK;
+        return app_relay_AllOffUnlocked();
+    }
+
+    if (cmd < E_RELAY_CMD_CLOSE || cmd > E_RELAY_CMD_STOP) {
+        ESP_LOGW(TAG, "Unknown relay command: %d", cmd);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // BƯỚC 2: Tắt toàn bộ để tránh chập pha
+    esp_err_t ret = app_relay_AllOffUnlocked();
+    if (ret != ESP_OK) {
+        return ret;
     }
 
     // BƯỚC 3: Tạo trễ an toàn cơ học (Khóa liên động)
