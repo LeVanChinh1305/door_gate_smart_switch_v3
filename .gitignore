@@ -1,0 +1,8 @@
+# ESP-IDF build
+build/
+
+# VS Code
+.vscode/
+
+.clangd
+
