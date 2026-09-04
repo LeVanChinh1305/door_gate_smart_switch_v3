@@ -1,3 +1,8 @@
+/**
+ * @file app_logic_touch.c
+ * @brief Điều phối các thao tác cảm ứng bằng queue và task Application Layer.
+ */
+
 #include "app_logic_touch.h"
 
 #include "app_touch.h"
@@ -16,6 +21,11 @@ static QueueHandle_t g_hTouchCommandQueue = NULL;
 static TaskHandle_t g_hTouchTask = NULL;
 static bool g_bIsReady = false;
 
+/**
+ * @brief Task nhận và xử lý các lệnh cảm ứng.
+ * @param pArg Tham số task, hiện không sử dụng.
+ * @return Không trả về; task chạy vô hạn.
+ */
 static void app_logic_touch_Task(void *pArg)
 {
     e_app_logic_touch_cmd_t eCommand;
@@ -49,6 +59,11 @@ static void app_logic_touch_Task(void *pArg)
     }
 }
 
+/**
+ * @brief Khởi tạo driver cảm ứng, queue và task điều khiển.
+ * @param None.
+ * @return ESP_OK nếu thành công; mã lỗi nếu khởi tạo thất bại.
+ */
 esp_err_t app_logic_touch_Init(void)
 {
     if (g_bIsReady) {
@@ -78,6 +93,11 @@ esp_err_t app_logic_touch_Init(void)
     return ESP_OK;
 }
 
+/**
+ * @brief Đưa lệnh cảm ứng vào queue để task xử lý bất đồng bộ.
+ * @param eCommand Lệnh cảm ứng cần gửi.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu tham số hoặc queue không hợp lệ.
+ */
 esp_err_t app_logic_touch_SendCommand(e_app_logic_touch_cmd_t eCommand)
 {
     if (!g_bIsReady || g_hTouchCommandQueue == NULL || g_hTouchTask == NULL) {

@@ -1,3 +1,8 @@
+/**
+ * @file app_logic_buzzer.c
+ * @brief Điều phối hoạt động buzzer bằng queue và task Application Layer.
+ */
+
 #include "app_logic_buzzer.h"
 
 #include "app_buzzer.h"
@@ -27,6 +32,11 @@ static QueueHandle_t g_hBuzzerCommandQueue = NULL;
 static TaskHandle_t g_hBuzzerTask = NULL;
 static bool g_bIsReady = false;
 
+/**
+ * @brief Task nhận và thực thi tuần tự các lệnh buzzer.
+ * @param pArg Tham số task, hiện không sử dụng.
+ * @return Không trả về; task chạy vô hạn.
+ */
 static void app_logic_buzzer_Task(void *pArg)
 {
     app_logic_buzzer_queue_item_t sItem;
@@ -48,6 +58,11 @@ static void app_logic_buzzer_Task(void *pArg)
     }
 }
 
+/**
+ * @brief Đưa một lệnh buzzer vào queue.
+ * @param pItem Con trỏ đến dữ liệu lệnh cần gửi.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu driver chưa sẵn sàng hoặc queue đầy.
+ */
 static esp_err_t app_logic_buzzer_SendItem(const app_logic_buzzer_queue_item_t *pItem)
 {
     if (!g_bIsReady || g_hBuzzerCommandQueue == NULL || g_hBuzzerTask == NULL) {
@@ -57,6 +72,11 @@ static esp_err_t app_logic_buzzer_SendItem(const app_logic_buzzer_queue_item_t *
                ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
+/**
+ * @brief Khởi tạo driver buzzer, queue và task điều khiển.
+ * @param None.
+ * @return ESP_OK nếu thành công; mã lỗi nếu khởi tạo thất bại.
+ */
 esp_err_t app_logic_buzzer_Init(void)
 {
     if (g_bIsReady) {
@@ -66,14 +86,17 @@ esp_err_t app_logic_buzzer_Init(void)
     if (eErr != ESP_OK) {
         return eErr;
     }
-    g_hBuzzerCommandQueue = xQueueCreate(DF_APP_LOGIC_BUZZER_QUEUE_LENGTH,
-                                          sizeof(app_logic_buzzer_queue_item_t));
+    g_hBuzzerCommandQueue = xQueueCreate(DF_APP_LOGIC_BUZZER_QUEUE_LENGTH,  sizeof(app_logic_buzzer_queue_item_t));
     if (g_hBuzzerCommandQueue == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreate(app_logic_buzzer_Task, "buzzer_logic",
-                    DF_APP_LOGIC_BUZZER_TASK_STACK, NULL,
-                    DF_APP_LOGIC_BUZZER_TASK_PRIORITY, &g_hBuzzerTask) != pdPASS) {
+    if (xTaskCreate(app_logic_buzzer_Task, 
+                    "buzzer_logic",
+                    DF_APP_LOGIC_BUZZER_TASK_STACK, 
+                    NULL,
+                    DF_APP_LOGIC_BUZZER_TASK_PRIORITY, 
+                    &g_hBuzzerTask) 
+        != pdPASS) {
         vQueueDelete(g_hBuzzerCommandQueue);
         g_hBuzzerCommandQueue = NULL;
         return ESP_ERR_NO_MEM;
@@ -82,18 +105,33 @@ esp_err_t app_logic_buzzer_Init(void)
     return ESP_OK;
 }
 
+/**
+ * @brief Gửi lệnh bật buzzer.
+ * @param None.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
+ */
 esp_err_t app_logic_buzzer_On(void)
 {
     app_logic_buzzer_queue_item_t sItem = {.eType = E_APP_LOGIC_BUZZER_CMD_ON};
     return app_logic_buzzer_SendItem(&sItem);
 }
 
+/**
+ * @brief Gửi lệnh tắt buzzer.
+ * @param None.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
+ */
 esp_err_t app_logic_buzzer_Off(void)
 {
     app_logic_buzzer_queue_item_t sItem = {.eType = E_APP_LOGIC_BUZZER_CMD_OFF};
     return app_logic_buzzer_SendItem(&sItem);
 }
 
+/**
+ * @brief Gửi lệnh phát beep trong khoảng thời gian chỉ định.
+ * @param u32DurationMs Thời gian phát, tính bằng mili-giây.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu thời gian hoặc queue không hợp lệ.
+ */
 esp_err_t app_logic_buzzer_Beep(uint32_t u32DurationMs)
 {
     if (u32DurationMs == 0U) {

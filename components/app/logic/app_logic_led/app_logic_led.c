@@ -1,3 +1,8 @@
+/**
+ * @file app_logic_led.c
+ * @brief Điều phối màu sắc và độ sáng LED bằng queue và task Application Layer.
+ */
+
 #include "app_logic_led.h"
 
 #include "esp_log.h"
@@ -15,7 +20,7 @@ typedef enum {
     E_APP_LOGIC_LED_CMD_SET_COLOR = 0,
     E_APP_LOGIC_LED_CMD_SET_BRIGHTNESS,
     E_APP_LOGIC_LED_CMD_SHOW
-} e_app_logic_led_cmd_t;
+} e_app_logic_led_cmd_t; 
 
 typedef struct {
     e_app_logic_led_cmd_t eType;
@@ -27,6 +32,11 @@ static QueueHandle_t g_hLedCommandQueue = NULL;
 static TaskHandle_t g_hLedTask = NULL;
 static bool g_bIsReady = false;
 
+/**
+ * @brief Task nhận và thực thi tuần tự các lệnh LED.
+ * @param pArg Tham số task, hiện không sử dụng.
+ * @return Không trả về; task chạy vô hạn.
+ */
 static void app_logic_led_Task(void *pArg)
 {
     app_logic_led_queue_item_t sItem;
@@ -50,6 +60,11 @@ static void app_logic_led_Task(void *pArg)
     }
 }
 
+/**
+ * @brief Đưa một lệnh LED vào queue.
+ * @param pItem Con trỏ đến dữ liệu lệnh cần gửi.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu driver chưa sẵn sàng hoặc queue đầy.
+ */
 static esp_err_t app_logic_led_SendItem(const app_logic_led_queue_item_t *pItem)
 {
     if (!g_bIsReady || g_hLedCommandQueue == NULL || g_hLedTask == NULL) {
@@ -59,6 +74,11 @@ static esp_err_t app_logic_led_SendItem(const app_logic_led_queue_item_t *pItem)
                ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
+/**
+ * @brief Khởi tạo driver LED, queue và task điều khiển.
+ * @param None.
+ * @return ESP_OK nếu thành công; mã lỗi nếu khởi tạo thất bại.
+ */
 esp_err_t app_logic_led_Init(void)
 {
     if (g_bIsReady) {
@@ -84,6 +104,11 @@ esp_err_t app_logic_led_Init(void)
     return ESP_OK;
 }
 
+/**
+ * @brief Gửi lệnh đặt màu cho toàn bộ dải LED.
+ * @param sColor Màu RGB cần hiển thị.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
+ */
 esp_err_t app_logic_led_SetColor(app_led_color_t sColor)
 {
     app_logic_led_queue_item_t sItem = {
@@ -93,6 +118,11 @@ esp_err_t app_logic_led_SetColor(app_led_color_t sColor)
     return app_logic_led_SendItem(&sItem);
 }
 
+/**
+ * @brief Gửi lệnh đặt độ sáng LED.
+ * @param u8Brightness Độ sáng từ 0 đến 255.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
+ */
 esp_err_t app_logic_led_SetBrightness(uint8_t u8Brightness)
 {
     app_logic_led_queue_item_t sItem = {
@@ -102,6 +132,11 @@ esp_err_t app_logic_led_SetBrightness(uint8_t u8Brightness)
     return app_logic_led_SendItem(&sItem);
 }
 
+/**
+ * @brief Gửi lệnh xuất màu hiện tại ra dải LED.
+ * @param None.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
+ */
 esp_err_t app_logic_led_Show(void)
 {
     app_logic_led_queue_item_t sItem = {.eType = E_APP_LOGIC_LED_CMD_SHOW};

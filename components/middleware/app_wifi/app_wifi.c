@@ -1,3 +1,8 @@
+/**
+ * @file app_wifi.c
+ * @brief Triển khai khởi tạo Wi-Fi STA và theo dõi trạng thái kết nối.
+ */
+
 #include "app_wifi.h"
 #include "app_nvs.h"
 
@@ -11,18 +16,26 @@
 #include "blufi_app.h"
 #include "device.h"
 
-
 static const char *TAG = "APP_WIFI";
-static int retry_sum = 0;
-static EventGroupHandle_t s_wifi_event_group = NULL; 
+static int32_t g_i32WifiRetryCount = 0;
+static EventGroupHandle_t g_hWifiEventGroup = NULL; 
 
-static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data){
-    if(event_base == WIFI_EVENT){
-        switch(event_id){
+/**
+ * @brief Xử lý sự kiện Wi-Fi và IP, bao gồm kết nối lại khi bị ngắt.
+ * @param pArg Tham số sự kiện, hiện không sử dụng.
+ * @param eEventBase Nhóm sự kiện Wi-Fi hoặc IP.
+ * @param i32EventId Mã sự kiện cần xử lý.
+ * @param pEventData Dữ liệu đi kèm sự kiện, có thể là NULL.
+ * @return Không trả về.
+ */
+static void wifi_event_handler(void *pArg, esp_event_base_t eEventBase, int32_t i32EventId, void *pEventData)
+{
+    if (eEventBase == WIFI_EVENT) {
+        switch (i32EventId) {
             case WIFI_EVENT_STA_START:
                 if (app_nvs_IsProvisionedWifiConfig()) {
                     ESP_LOGI(TAG, "Wi-Fi STA đã khởi động, đang kết nối...");
-                    esp_wifi_connect();
+                    (void)esp_wifi_connect();
                 } else {
                     ESP_LOGI(TAG, "Wi-Fi STA đã khởi động, đang chờ cấu hình BLE...");
                 }
@@ -32,45 +45,44 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
                 break;
             case WIFI_EVENT_STA_DISCONNECTED:
             {
-                wifi_event_sta_disconnected_t *event = (wifi_event_sta_disconnected_t *)event_data;
-                if (event != NULL) {
-                    ESP_LOGW(TAG, "Đã ngắt kết nối khỏi AP, mã nguyên nhân: %d", event->reason);
+                wifi_event_sta_disconnected_t *pEvent = (wifi_event_sta_disconnected_t *)pEventData;
+                if (pEvent != NULL) {
+                    ESP_LOGW(TAG, "Đã ngắt kết nối khỏi AP, mã nguyên nhân: %d", pEvent->reason);
                 } else {
                     ESP_LOGW(TAG, "Đã ngắt kết nối khỏi AP, không có thông tin nguyên nhân");
                 }
 
-                if (retry_sum < MAXIMUM_RETRY_CONNECT_WIFI) {
-                    retry_sum++;
-                    ESP_LOGI(TAG, "Đang thử kết nối lại %d/%d", retry_sum, MAXIMUM_RETRY_CONNECT_WIFI);
+                if (g_i32WifiRetryCount < DF_WIFI_MAX_RETRY_COUNT) {
+                    g_i32WifiRetryCount++;
+                    ESP_LOGI(TAG, "Đang thử kết nối lại %ld/%d", (long)g_i32WifiRetryCount, DF_WIFI_MAX_RETRY_COUNT);
                     vTaskDelay(pdMS_TO_TICKS(1000));
-                    esp_wifi_connect();
+                    (void)esp_wifi_connect();
                 } else {
-                    retry_sum = 0;
-                    if (s_wifi_event_group != NULL) {
-                        xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+                    g_i32WifiRetryCount = 0;
+                    if (g_hWifiEventGroup != NULL) {
+                        (void)xEventGroupSetBits(g_hWifiEventGroup, DF_WIFI_FAIL_BIT);
                     }
-                    ESP_LOGE(TAG, "Không thể kết nối Wi-Fi sau %d lần thử", MAXIMUM_RETRY_CONNECT_WIFI);
+                    ESP_LOGE(TAG, "Không thể kết nối Wi-Fi sau %d lần thử", DF_WIFI_MAX_RETRY_COUNT);
                 }
                 break;
             }
             default:
                 break; 
         }
-    }else if(event_base == IP_EVENT){
-        switch (event_id) {
+    } else if (eEventBase == IP_EVENT) {
+        switch (i32EventId) {
             case IP_EVENT_STA_GOT_IP:
             {
-
-                ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-                if (event != NULL) {
-                    ESP_LOGI(TAG, "Đã nhận địa chỉ IP: " IPSTR, IP2STR(&event->ip_info.ip));
+                ip_event_got_ip_t *pEvent = (ip_event_got_ip_t *)pEventData;
+                if (pEvent != NULL) {
+                    ESP_LOGI(TAG, "Đã nhận địa chỉ IP: " IPSTR, IP2STR(&pEvent->ip_info.ip));
                 }
-                retry_sum = 0;
-                if (s_wifi_event_group != NULL) {
-                    xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+                g_i32WifiRetryCount = 0;
+                if (g_hWifiEventGroup != NULL) {
+                    (void)xEventGroupSetBits(g_hWifiEventGroup, DF_WIFI_CONNECTED_BIT);
                 }
-                if (blufi_app_is_connected()) {
-                    blufi_app_report_wifi_status(true);
+                if (app_blufi_IsConnected()) {
+                    app_blufi_ReportWifiStatus(true);
                 }
                 break;
             }
@@ -85,129 +97,139 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     }
 }
 
-esp_err_t app_wifi_init_sta(void){
-    if(s_wifi_event_group == NULL){
-        s_wifi_event_group = xEventGroupCreate(); 
-        if(s_wifi_event_group == NULL){
+/**
+ * @brief Khởi tạo các thành phần mạng và bắt đầu Wi-Fi STA nếu có cấu hình.
+ * @param None.
+ * @return ESP_OK nếu thành công; mã lỗi của thành phần thất bại.
+ */
+esp_err_t app_wifi_InitSta(void)
+{
+    if (g_hWifiEventGroup == NULL) {
+        g_hWifiEventGroup = xEventGroupCreate(); 
+        if (g_hWifiEventGroup == NULL) {
             ESP_LOGE(TAG, "Khởi tạo event group thất bại");
-            return ESP_ERR_NO_MEM; // Khong du bo nho 
+            return ESP_ERR_NO_MEM; 
         }
     }
-    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT); 
-    esp_err_t ret = ESP_OK;
-    // khởi tạo LWIP stack
-    ret = esp_netif_init();  
-    if(ret != ESP_OK){
-        ESP_LOGE(TAG, "Khởi tạo esp_netif thất bại: %s", esp_err_to_name(ret));
-        return ret; 
+    
+    (void)xEventGroupClearBits(g_hWifiEventGroup, DF_WIFI_CONNECTED_BIT | DF_WIFI_FAIL_BIT); 
+    
+    esp_err_t eRet = esp_netif_init();  
+    if (eRet != ESP_OK) {
+        ESP_LOGE(TAG, "Khởi tạo esp_netif thất bại: %s", esp_err_to_name(eRet));
+        return eRet; 
     }
 
-    // tạo event loop mặc định
-    ret = esp_event_loop_create_default();  
-    if(ret != ESP_OK && ret != ESP_ERR_INVALID_STATE){  // Lỗi hoặc là trạng thái không hợp lệ 
-                                                        // không hợp lệ là đã khởi tạo trước đó (ý là chỉ được cho phép 1 event loop)
-        ESP_LOGE(TAG, "Tạo event loop mặc định thất bại: %s", esp_err_to_name(ret));
+    eRet = esp_event_loop_create_default();  
+    if (eRet != ESP_OK && eRet != ESP_ERR_INVALID_STATE) {  
+        ESP_LOGE(TAG, "Tạo event loop mặc định thất bại: %s", esp_err_to_name(eRet));
+        return eRet;
     }
 
-    // tạo đối tượng netif dạng sta 
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta(); 
-    if(sta_netif == NULL){
+    esp_netif_t *pStaNetif = esp_netif_create_default_wifi_sta(); 
+    if (pStaNetif == NULL) {
         ESP_LOGE(TAG, "Tạo Wi-Fi STA mặc định thất bại");
         return ESP_FAIL;
     }
 
-    // Khởi tạo wifi driver 
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ret = esp_wifi_init(&cfg);
-    if(ret != ESP_OK){
-        ESP_LOGE(TAG, "Khởi tạo esp_wifi thất bại: %s", esp_err_to_name(ret));
-        return ret; 
+    wifi_init_config_t sCfg = WIFI_INIT_CONFIG_DEFAULT();
+    eRet = esp_wifi_init(&sCfg);
+    if (eRet != ESP_OK) {
+        ESP_LOGE(TAG, "Khởi tạo esp_wifi thất bại: %s", esp_err_to_name(eRet));
+        return eRet; 
     }
 
-    // đăng ký sự kiện 
-    ret = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL); 
-    if(ret != ESP_OK){
-        ESP_LOGE(TAG, "Đăng ký sự kiện Wi-Fi thất bại: %s", esp_err_to_name(ret));
-        return ret; 
+    eRet = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL); 
+    if (eRet != ESP_OK) {
+        ESP_LOGE(TAG, "Đăng ký sự kiện Wi-Fi thất bại: %s", esp_err_to_name(eRet));
+        return eRet; 
     }
-    ret = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL); 
-    if(ret != ESP_OK){
-        ESP_LOGE(TAG, "Đăng ký sự kiện IP thất bại: %s", esp_err_to_name(ret));
-        return ret; 
+    
+    eRet = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL); 
+    if (eRet != ESP_OK) {
+        ESP_LOGE(TAG, "Đăng ký sự kiện IP thất bại: %s", esp_err_to_name(eRet));
+        return eRet; 
     }
 
-    wifi_config_t wifi_cfg = {0}; 
-    ret = app_nvs_LoadWifiConfig(&wifi_cfg);
-    if(ret == ESP_OK){
+    wifi_config_t sWifiCfg = {0}; 
+    eRet = app_nvs_LoadWifiConfig(&sWifiCfg);
+    if (eRet == ESP_OK) {
         ESP_LOGI(TAG, "Đã tải cấu hình Wi-Fi từ NVS");
-        ESP_LOGI(TAG, "SSID: %s", (char *)wifi_cfg.sta.ssid);
-        ESP_LOGI(TAG, "Mật khẩu: %s", (char *)wifi_cfg.sta.password);
-        wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-        wifi_cfg.sta.pmf_cfg.capable = true;
-        wifi_cfg.sta.pmf_cfg.required = false;
-        // thiết lập mode 
-        ret = esp_wifi_set_mode(WIFI_MODE_STA); 
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Thiết lập chế độ esp_wifi thất bại: %s", esp_err_to_name(ret));
-            return ret;
+        ESP_LOGI(TAG, "SSID: %s", (char *)sWifiCfg.sta.ssid);
+        
+        sWifiCfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        sWifiCfg.sta.pmf_cfg.capable = true;
+        sWifiCfg.sta.pmf_cfg.required = false;
+        
+        eRet = esp_wifi_set_mode(WIFI_MODE_STA); 
+        if (eRet != ESP_OK) {
+            ESP_LOGE(TAG, "Thiết lập chế độ esp_wifi thất bại: %s", esp_err_to_name(eRet));
+            return eRet;
         }
 
-        ret = esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Thiết lập cấu hình esp_wifi thất bại: %s", esp_err_to_name(ret));
-            return ret;
+        eRet = esp_wifi_set_config(WIFI_IF_STA, &sWifiCfg);
+        if (eRet != ESP_OK) {
+            ESP_LOGE(TAG, "Thiết lập cấu hình esp_wifi thất bại: %s", esp_err_to_name(eRet));
+            return eRet;
         }
 
-        // khởi chạy wifi driver 
-        ret = esp_wifi_start();
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Khởi động esp_wifi thất bại: %s", esp_err_to_name(ret));
-            return ret;
+        eRet = esp_wifi_start();
+        if (eRet != ESP_OK) {
+            ESP_LOGE(TAG, "Khởi động esp_wifi thất bại: %s", esp_err_to_name(eRet));
+            return eRet;
         }
-        // kiểm tra đặt công suất 
-        ret = esp_wifi_set_max_tx_power(40);
-        if(ret != ESP_OK){
-            ESP_LOGE(TAG, "Thiết lập công suất phát tối đa thất bại: %s", esp_err_to_name(ret));
-            return ret; 
+        
+        eRet = esp_wifi_set_max_tx_power(DF_WIFI_MAX_TX_POWER);
+        if (eRet != ESP_OK) {
+            ESP_LOGE(TAG, "Thiết lập công suất phát tối đa thất bại: %s", esp_err_to_name(eRet));
+            return eRet; 
         }
 
-    }else if(ret == ESP_ERR_NVS_NOT_FOUND){
-        ESP_LOGI(TAG, "NVS không chứa cấu hình wifi, cần vào chế độ kết nối ");
-        // bật chế độ kết nối tự động, gửi lệnh bật đèn nháy màu xanh dương và set trạng thái thiết bị 
+    } else if (eRet == ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGI(TAG, "NVS không chứa cấu hình wifi, chuyển sang chế độ chờ kết nối");
         set_current_door_mode(DEVICE_MODE_UNCONNECTED);
-
-    }else{
-        ESP_LOGE(TAG, "tải cấu hình WiFi thất bại: %s",esp_err_to_name(ret));
-        return ret;
+    } else {
+        ESP_LOGE(TAG, "Tải cấu hình WiFi thất bại: %s", esp_err_to_name(eRet));
+        return eRet;
     }
 
     return ESP_OK;
 }
 
-bool app_wifi_is_connected(void)
+/**
+ * @brief Đọc cờ trạng thái Wi-Fi đã kết nối.
+ * @param None.
+ * @return true nếu đã kết nối; false nếu chưa khởi tạo hoặc chưa kết nối.
+ */
+bool app_wifi_IsConnected(void)
 {
-    if (s_wifi_event_group == NULL) {
+    if (g_hWifiEventGroup == NULL) {
         return false;
     }
-    EventBits_t bits = xEventGroupGetBits(s_wifi_event_group);
-    return (bits & WIFI_CONNECTED_BIT) != 0;
+    EventBits_t uxBits = xEventGroupGetBits(g_hWifiEventGroup);
+    return (uxBits & DF_WIFI_CONNECTED_BIT) != 0;
 }
 
-bool app_wifi_wait_for_connect(uint32_t timeout_ms){
-    if (s_wifi_event_group == NULL) {
+/**
+ * @brief Chờ một trong các sự kiện kết nối hoặc thất bại.
+ * @param u32TimeoutMs Thời gian chờ tối đa, tính bằng mili-giây.
+ * @return true nếu nhận được sự kiện kết nối; false nếu thất bại hoặc hết thời gian.
+ */
+bool app_wifi_WaitForConnect(uint32_t u32TimeoutMs)
+{
+    if (g_hWifiEventGroup == NULL) {
         return false;
     }
 
-    // Xóa các bit cũ trước khi chờ kết quả mới
-    xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT);
+    (void)xEventGroupClearBits(g_hWifiEventGroup, DF_WIFI_CONNECTED_BIT | DF_WIFI_FAIL_BIT);
 
-    EventBits_t bits = xEventGroupWaitBits(
-        s_wifi_event_group,
-        WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-        pdFALSE,                            // không tự clear bit
-        pdFALSE,                            // chỉ cần 1 trong 2 bit
-        pdMS_TO_TICKS(timeout_ms)           // chờ tối đa timeout_ms
+    EventBits_t uxBits = xEventGroupWaitBits(
+        g_hWifiEventGroup,
+        DF_WIFI_CONNECTED_BIT | DF_WIFI_FAIL_BIT,
+        pdFALSE,                            
+        pdFALSE,                            
+        pdMS_TO_TICKS(u32TimeoutMs)           
     );
 
-    return (bits & WIFI_CONNECTED_BIT) != 0;
+    return (uxBits & DF_WIFI_CONNECTED_BIT) != 0;
 }
