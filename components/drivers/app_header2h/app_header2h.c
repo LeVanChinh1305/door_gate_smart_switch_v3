@@ -35,24 +35,24 @@ esp_err_t app_header2h_Init(app_header2h_cb_t cb, void *arg){
     };
     esp_err_t ret = gpio_config(&io_config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Cấu hình GPIO thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
     esp_err_t isr_service_ret = gpio_install_isr_service(DF_HEADER2H_ISR_FLAGS);
     if (isr_service_ret != ESP_OK && isr_service_ret != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "gpio_install_isr_service failed: %s", esp_err_to_name(isr_service_ret));
+        ESP_LOGE(TAG, "Cài đặt dịch vụ ISR thất bại: %s", esp_err_to_name(isr_service_ret));
         return isr_service_ret;
     }
 
     ret = gpio_isr_handler_add(DF_HEADER2H_GPIO_PIN, app_header2h_IsrHandler, NULL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_isr_handler_add failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Đăng ký trình xử lý ISR thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
     g_bIsReady = true;
-    ESP_LOGI(TAG, "Header input initialized on GPIO%d", DF_HEADER2H_GPIO_PIN);
+    ESP_LOGI(TAG, "Khởi tạo đầu vào header thành công trên GPIO%d", DF_HEADER2H_GPIO_PIN);
     return ESP_OK;
 }
 

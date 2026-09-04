@@ -112,7 +112,7 @@ esp_err_t app_touch_Init(void)
 
     esp_err_t ret = i2c_new_master_bus(&bus_cfg, &g_bus_handle);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "i2c_new_master_bus failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Tạo bus I2C master thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -124,7 +124,7 @@ esp_err_t app_touch_Init(void)
 
     ret = i2c_master_bus_add_device(g_bus_handle, &dev_cfg, &g_dev_handle);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "i2c_master_bus_add_device failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Thêm thiết bị vào bus I2C thất bại: %s", esp_err_to_name(ret));
         app_touch_Cleanup();
         return ret;
     }
@@ -136,13 +136,13 @@ esp_err_t app_touch_Init(void)
 
     ret = app_touch_CheckDevice();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "CY8CMBR3108 not found");
+        ESP_LOGE(TAG, "Không tìm thấy CY8CMBR3108");
         g_bIsReady = false;
         app_touch_Cleanup();
         return ret;
     }
 
-    ESP_LOGI(TAG, "CY8CMBR3108 init OK");
+    ESP_LOGI(TAG, "Khởi tạo CY8CMBR3108 thành công");
     return ESP_OK;
 }
 
@@ -156,11 +156,11 @@ esp_err_t app_touch_CheckDevice(void)
 
     if (family != DF_TOUCH_FAMILY_ID_DEFAULT ||
         device_id != DF_TOUCH_DEVICE_ID_DEFAULT) {
-        ESP_LOGW(TAG, "ID mismatch: FAMILY=0x%02X, DEVICE=0x%04X", family, device_id);
+        ESP_LOGW(TAG, "ID không khớp: FAMILY=0x%02X, DEVICE=0x%04X", family, device_id);
         return ESP_ERR_INVALID_RESPONSE;
     }
 
-    ESP_LOGI(TAG, "Device OK - FAMILY=0x%02X, DEVICE=0x%04X", family, device_id);
+    ESP_LOGI(TAG, "Thiết bị hợp lệ - FAMILY=0x%02X, DEVICE=0x%04X", family, device_id);
     return ESP_OK;
 }
 
@@ -221,7 +221,7 @@ esp_err_t app_touch_SendCmd(uint8_t cmd)
             uint8_t err = 0;
             app_touch_ReadReg(DF_TOUCH_REG_CTRL_CMD_ERR, &err);
             if (err != DF_TOUCH_CMD_ERR_SUCCESS) {
-                ESP_LOGW(TAG, "CMD 0x%02X error: 0x%02X", cmd, err);
+                ESP_LOGW(TAG, "Lệnh CMD 0x%02X gặp lỗi: 0x%02X", cmd, err);
                 return ESP_FAIL;
             }
             return ESP_OK;
@@ -229,7 +229,7 @@ esp_err_t app_touch_SendCmd(uint8_t cmd)
         vTaskDelay(pdMS_TO_TICKS(DF_TOUCH_COMMAND_RETRY_DELAY_MS));
     }
 
-    ESP_LOGW(TAG, "CMD 0x%02X timeout", cmd);
+    ESP_LOGW(TAG, "Lệnh CMD 0x%02X hết thời gian chờ", cmd);
     return ESP_ERR_TIMEOUT;
 }
 

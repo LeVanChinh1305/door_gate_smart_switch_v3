@@ -9,6 +9,12 @@ set(EXTRA_COMPONENT_DIRS
 	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_relay
 	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_touch
 	${CMAKE_CURRENT_LIST_DIR}/components/drivers/app_zero_cross
+	${CMAKE_CURRENT_LIST_DIR}/components/app/app_logic_relay
+	${CMAKE_CURRENT_LIST_DIR}/components/app/app_logic_touch
+	${CMAKE_CURRENT_LIST_DIR}/components/app/app_logic_led
+	${CMAKE_CURRENT_LIST_DIR}/components/app/app_logic_buzzer
+	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_nvs
+	${CMAKE_CURRENT_LIST_DIR}/components/common
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

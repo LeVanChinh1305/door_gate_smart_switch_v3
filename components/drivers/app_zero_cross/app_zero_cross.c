@@ -48,27 +48,27 @@ esp_err_t app_zero_cross_Init(app_zero_cross_cb_t cb, void *arg)
     
     esp_err_t ret = gpio_config(&io_conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Cấu hình GPIO zero-cross thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
     // Đăng ký dịch vụ ngắt toàn cục (Có thể trả về INVALID_STATE nếu đã đăng ký bởi module khác, điều này hợp lệ)
     ret = gpio_install_isr_service(DF_ZERO_CROSS_INTR_FLAG);
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "gpio_install_isr_service failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Cài đặt dịch vụ ISR zero-cross thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
     ret = gpio_isr_handler_add(DF_ZERO_CROSS_PIN, app_zero_cross_IsrHandler, NULL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_isr_handler_add failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Đăng ký trình xử lý ISR zero-cross thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
     g_bIsReady = true;
     g_bWaitForZeroCross = false;
 
-    ESP_LOGI(TAG, "Zero-Cross ISR registered on GPIO%d", DF_ZERO_CROSS_PIN);
+    ESP_LOGI(TAG, "Đã đăng ký ISR zero-cross trên GPIO%d", DF_ZERO_CROSS_PIN);
     return ESP_OK;
 }
 

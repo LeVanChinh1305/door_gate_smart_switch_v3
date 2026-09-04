@@ -24,19 +24,19 @@ esp_err_t app_buzzer_Init(void)
 
     esp_err_t ret = gpio_config(&io_config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Init failed on GPIO%d: %s", DF_BUZZER_PIN, esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Khởi tạo GPIO%d thất bại: %s", DF_BUZZER_PIN, esp_err_to_name(ret));
         return ret;
     }
 
     // Ép tắt còi ngay khi khởi tạo để đảm bảo trạng thái an toàn
     ret = gpio_set_level(DF_BUZZER_PIN, 0);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to turn buzzer off: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Tắt buzzer thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
     g_bIsReady = true;
-    ESP_LOGI(TAG, "Buzzer init OK on GPIO%d", DF_BUZZER_PIN);
+    ESP_LOGI(TAG, "Khởi tạo buzzer thành công trên GPIO%d", DF_BUZZER_PIN);
     return ESP_OK;
 }
 

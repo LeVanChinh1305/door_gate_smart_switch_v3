@@ -38,7 +38,7 @@ static uint8_t g_u8Brightness = UINT8_MAX;
 esp_err_t app_led_Init(gpio_num_t gpio)
 {
     if (g_bIsReady) {
-        ESP_LOGW(TAG, "app_led_Init() called again, ignoring");
+        ESP_LOGW(TAG, "app_led_Init() được gọi lại, bỏ qua");
         return ESP_OK;
     }
 
@@ -52,7 +52,7 @@ esp_err_t app_led_Init(gpio_num_t gpio)
 
     esp_err_t err = rmt_new_tx_channel(&tx_config, &g_rmt_channel);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "rmt_new_tx_channel failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Tạo kênh truyền RMT thất bại: %s", esp_err_to_name(err));
         return err;
     }
 
@@ -78,7 +78,7 @@ esp_err_t app_led_Init(gpio_num_t gpio)
 
     err = rmt_new_bytes_encoder(&encoder_config, &g_led_encoder);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "rmt_new_bytes_encoder failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Tạo bộ mã hóa byte RMT thất bại: %s", esp_err_to_name(err));
         rmt_del_channel(g_rmt_channel);
         g_rmt_channel = NULL;
         return err;
@@ -86,7 +86,7 @@ esp_err_t app_led_Init(gpio_num_t gpio)
 
     err = rmt_enable(g_rmt_channel);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "rmt_enable failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Bật RMT thất bại: %s", esp_err_to_name(err));
         rmt_del_encoder(g_led_encoder);
         rmt_del_channel(g_rmt_channel);
         g_led_encoder = NULL;
@@ -111,7 +111,7 @@ esp_err_t app_led_Init(gpio_num_t gpio)
         return err;
     }
 
-    ESP_LOGI(TAG, "LED driver ready on GPIO%d, %d LED(s)", gpio, DF_LED_COUNT);
+    ESP_LOGI(TAG, "Driver LED sẵn sàng trên GPIO%d, số LED: %d", gpio, DF_LED_COUNT);
     return ESP_OK;
 }
 
@@ -128,7 +128,7 @@ esp_err_t app_led_Deinit(void)
 
     esp_err_t err = rmt_disable(g_rmt_channel);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "rmt_disable failed: %s", esp_err_to_name(err));
+        ESP_LOGW(TAG, "Tắt RMT thất bại: %s", esp_err_to_name(err));
     }
 
     if (g_led_encoder) {
@@ -190,7 +190,7 @@ static inline uint8_t scale8(uint8_t value, uint8_t brightness)
 esp_err_t app_led_Show(void)
 {
     if (!g_bIsReady) {
-        ESP_LOGW(TAG, "app_led_Show() called before app_led_Init()");
+        ESP_LOGW(TAG, "app_led_Show() được gọi trước app_led_Init()");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -212,13 +212,13 @@ esp_err_t app_led_Show(void)
 
     esp_err_t err = rmt_transmit(g_rmt_channel, g_led_encoder, g_led_data, sizeof(g_led_data), &tx_config);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "rmt_transmit failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "Truyền dữ liệu RMT thất bại: %s", esp_err_to_name(err));
         return err;
     }
 
     const esp_err_t wait_result = rmt_tx_wait_all_done(g_rmt_channel, pdMS_TO_TICKS(DF_LED_TIMEOUT_MS));
     if (wait_result != ESP_OK) {
-        ESP_LOGE(TAG, "rmt_tx_wait_all_done failed: %s", esp_err_to_name(wait_result));
+        ESP_LOGE(TAG, "Chờ RMT truyền xong thất bại: %s", esp_err_to_name(wait_result));
         return wait_result;
     }
 

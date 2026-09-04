@@ -22,7 +22,7 @@ static esp_err_t app_relay_SetLevel(gpio_num_t gpio, uint32_t level)
 {
     esp_err_t ret = gpio_set_level(gpio, level);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to set GPIO%d to %lu: %s", gpio, (unsigned long)level, esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Thiết lập GPIO%d ở mức %lu thất bại: %s", gpio, (unsigned long)level, esp_err_to_name(ret));
     }
     return ret;
 }
@@ -68,7 +68,7 @@ esp_err_t app_relay_Init(void)
 
     esp_err_t ret = gpio_config(&io_conf);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config failed: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Cấu hình GPIO relay thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -80,7 +80,7 @@ esp_err_t app_relay_Init(void)
 
     g_bIsReady = true;
 
-    ESP_LOGI(TAG, "Relay GPIO init OK (CLOSE=GPIO%d, OPEN=GPIO%d, STOP=GPIO%d)", 
+    ESP_LOGI(TAG, "Khởi tạo GPIO relay thành công (CLOSE=GPIO%d, OPEN=GPIO%d, STOP=GPIO%d)",
              DF_RELAY_PIN_CLOSE, DF_RELAY_PIN_OPEN, DF_RELAY_PIN_STOP);
     return ESP_OK;
 }
@@ -88,7 +88,7 @@ esp_err_t app_relay_Init(void)
 esp_err_t app_relay_ExecuteCmd(e_app_relay_cmd_t cmd)
 {
     if (!g_bIsReady) {
-        ESP_LOGW(TAG, "Relay driver not initialized");
+        ESP_LOGW(TAG, "Driver relay chưa được khởi tạo");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -98,7 +98,7 @@ esp_err_t app_relay_ExecuteCmd(e_app_relay_cmd_t cmd)
     }
 
     if (cmd < E_RELAY_CMD_CLOSE || cmd > E_RELAY_CMD_STOP) {
-        ESP_LOGW(TAG, "Unknown relay command: %d", cmd);
+        ESP_LOGW(TAG, "Lệnh relay không xác định: %d", cmd);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -123,7 +123,7 @@ esp_err_t app_relay_ExecuteCmd(e_app_relay_cmd_t cmd)
             return app_relay_SetLevel(DF_RELAY_PIN_STOP, 1);
         
         default:
-            ESP_LOGW(TAG, "Unknown relay command: %d", cmd);
+            ESP_LOGW(TAG, "Lệnh relay không xác định: %d", cmd);
             return ESP_ERR_INVALID_ARG;
     }
 }
