@@ -1,0 +1,43 @@
+#ifndef APP_ZERO_CROSS_H
+#define APP_ZERO_CROSS_H
+
+#include "esp_err.h"
+#include "driver/gpio.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define DF_ZERO_CROSS_PIN GPIO_NUM_2
+
+/**
+ * @brief Định nghĩa kiểu con trỏ hàm Callback cho ngắt Zero-Cross.
+ * @note  Hàm này sẽ được thực thi trong ngữ cảnh Ngắt (ISR Context).
+ */
+typedef void (*app_zero_cross_cb_t)(void *arg);
+
+/**
+ * @brief   Khởi tạo chân GPIO và đăng ký ngắt Zero-Cross.
+ * @param   cb  Con trỏ hàm callback sẽ được gọi khi phát hiện điểm 0.
+ * @param   arg Tham số tùy chọn truyền vào callback.
+ * @return  esp_err_t: ESP_OK nếu thành công.
+ */
+esp_err_t app_zero_cross_Init(app_zero_cross_cb_t cb, void *arg);
+
+/**
+ * @brief   Bật cờ chờ tín hiệu điểm 0.
+ * @return  esp_err_t: ESP_OK nếu thành công, ESP_ERR_INVALID_STATE nếu chưa Init.
+ */
+esp_err_t app_zero_cross_EnableWait(void);
+
+/**
+ * @brief   Tắt cờ chờ tín hiệu điểm 0.
+ * @return  esp_err_t: ESP_OK nếu thành công.
+ */
+esp_err_t app_zero_cross_DisableWait(void);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* APP_ZERO_CROSS_H */

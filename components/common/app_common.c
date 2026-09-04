@@ -17,7 +17,7 @@ esp_err_t app_common_StatusToEspErr(e_app_status_t eStatus){
             eRet = ESP_OK;
             break;
         case E_APP_STATUS_NO_CHANGE:
-            eRet = ESP_OK;
+            eRet = ESP_OK; 
             break;
         case E_APP_STATUS_BUSY:
             eRet = ESP_ERR_INVALID_STATE;
