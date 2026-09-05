@@ -13,8 +13,8 @@
 #include "stdbool.h"
 #include "esp_log.h"
 #include "nvs.h"
-#include "blufi_app.h"
-#include "device.h"
+#include "app_blufi.h"
+#include "app_device_state.h"
 
 static const char *TAG = "APP_WIFI";
 static int32_t g_i32WifiRetryCount = 0;
