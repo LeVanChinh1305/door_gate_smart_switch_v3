@@ -14,6 +14,7 @@
 #include "app_blufi.h"
 #include "app_device_state.h"
 #include "app_mqtt.h"
+#include "app_logic_mqtt.h"
 
 
 static const char *TAG = "APP_MAIN";
@@ -58,6 +59,12 @@ void app_main(void)
     eRet = app_logic_buzzer_Init();
     if (eRet != ESP_OK) {
         ESP_LOGE(TAG, "Khởi tạo logic buzzer thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
+        return;
+    }
+
+    eRet = app_logic_mqtt_Init();
+    if (eRet != ESP_OK) {
+        ESP_LOGE(TAG, "Khởi tạo logic MQTT thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
         return;
     }
 

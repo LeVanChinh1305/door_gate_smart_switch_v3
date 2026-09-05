@@ -1,3 +1,3 @@
 idf_component_register(SRCS "app_mqtt.c"
                        INCLUDE_DIRS "include"
-                       REQUIRES mqtt nvs_flash app_nvs common)
+                       REQUIRES mqtt nvs_flash app_nvs common app_logic_mqtt)

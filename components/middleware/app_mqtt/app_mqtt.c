@@ -12,6 +12,7 @@
 #include "mqtt_client.h"
 #include "esp_log.h"
 #include "esp_crt_bundle.h"
+#include "app_logic_mqtt.h"
 
 static esp_mqtt_client_handle_t g_xMqttClient = NULL;
 static bool g_bIsConnected = false;
@@ -81,7 +82,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "=================== MQTT Data received ===================");
         ESP_LOGI(TAG, "topic: %.*s", pEvent->topic_len, pEvent->topic);
         ESP_LOGI(TAG, "Data: %.*s", pEvent->data_len, pEvent->data);
-        //(void)app_logic_mqtt_EnqueueData(pEvent->data, (uint32_t)pEvent->data_len);
+        (void)app_logic_mqtt_EnqueueData(pEvent->data, (uint32_t)pEvent->data_len);
         break; 
 
     case MQTT_EVENT_ERROR:
