@@ -51,7 +51,8 @@ extern "C" {
 // Thời gian đồng bộ hệ thống (Global Timings)
 #define DF_INTERLOCK_DELAY_MS   (100)     // thời gian chờ giữa các lệnh điều khiển Relay để tránh xung đột cơ khí (cửa cuốn, cửa cổng)
 #define DF_NETWORK_TIMEOUT_MS   (5000)    // thời gian chờ kết nối mạng (WiFi, MQTT, UDP) trước khi báo lỗi
-#define DF_WIFI_CONNECT_TIMEOUT_MS  (120000) // thời gian chờ kết nối WiFi trước khi báo lỗi 
+#define DF_WIFI_CONNECT_TIMEOUT_MS  (120000) // thời gian chờ kết nối WiFi trước khi báo lỗi
+#define DF_DEVICE_BEFORE_RESTART (1000) // Thời gian trước khi thiết bị restart 
 
 
 

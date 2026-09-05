@@ -21,6 +21,8 @@
 #include "app_nvs.h"
 #include "app_blufi.h"
 #include "app_wifi.h"
+#include "app_device_state.h"
+#include "app_mqtt.h"
 
 
 
@@ -37,7 +39,7 @@ static bool g_bShutdownAfterDisconnect = false;
 static app_nvs_device_config_t g_sCurrentDeviceConfig = {0};
 
 
-static const char *TAG = "BLUFI_APP";
+static const char *TAG = "APP_BLUFI";
 
 // // Tham số cấu hình quảng bá BLE
 static esp_ble_adv_params_t blufi_adv_params = {
@@ -94,7 +96,6 @@ void app_blufi_gap_event_handler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_pa
             ESP_LOGI(TAG, "Phát quảng bá thành công");
         }
         break;
-
     default:
         break;
     }
@@ -120,7 +121,6 @@ static void set_string_field(char *dest, size_t dest_size, const cJSON *item)
     if ((dest == NULL) || (dest_size == 0U) || (item == NULL)) {
         return;
     }
-
     if (cJSON_IsString(item) && (item->valuestring != NULL)) {
         (void)snprintf(dest, dest_size, "%s", item->valuestring);
     }
@@ -487,8 +487,11 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
 
                         if (status_code == 50000) {
                             const esp_err_t eErr = app_nvs_SaveDeviceConfig(&g_sCurrentDeviceConfig);
-                            if (eErr != ESP_OK) {
-                                status_code = 50004; // Lỗi lưu storage
+                            if (eErr == ESP_OK) {
+                                // Cập nhật lại trạng thái thiết bị sang Normal
+                                set_current_door_mode(DEVICE_MODE_NORMAL);
+                                // Khởi tạo MQTT luôn
+                                app_mqtt_StartInit(&g_sCurrentDeviceConfig);
                             }
                         }
                     } else {
@@ -517,6 +520,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
         ESP_LOGI(TAG, "Yêu cầu ngắt kết nối BLE từ phía Slave -> Tắt toàn bộ BLUFI");
         g_bShutdownAfterDisconnect = true;
         (void)esp_blufi_disconnect();
+
         break;
 
     default:
