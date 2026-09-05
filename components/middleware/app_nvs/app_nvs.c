@@ -79,6 +79,10 @@ static esp_err_t app_nvs_LoadDeviceConfigFromHandle(nvs_handle_t hHandle, app_nv
 esp_err_t app_nvs_InitNvs(void) {
   ESP_LOGI(TAG, "Bắt đầu khởi tạo bộ nhớ NVS");
   esp_err_t ret = ESP_OK;
+  ret = nvs_flash_erase();
+  if(ret != ESP_OK){
+    ESP_LOGE(TAG, "Đang tiến hành xóa NVS để test");
+  }
   ret = nvs_flash_init();
   if ((ret == ESP_ERR_NVS_NO_FREE_PAGES) ||
       (ret == ESP_ERR_NVS_NEW_VERSION_FOUND)) {
