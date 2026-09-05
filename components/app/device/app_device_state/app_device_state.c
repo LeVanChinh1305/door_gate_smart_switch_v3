@@ -3,7 +3,7 @@
  * @brief   Triển khai quản lý trạng thái thiết bị (device_mode_t, control_mode_t, v.v.)
  */
 
-#include "device.h"
+#include "app_device_state.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "esp_log.h"
