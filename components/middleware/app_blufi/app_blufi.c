@@ -1,4 +1,4 @@
-#include "esp_blufi.h"
+#include "esp_blufi.h" 
 #include "esp_bt.h"
 #include "esp_bt_device.h"
 #include "esp_bt_main.h"
@@ -445,7 +445,6 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                         const cJSON *js_dev_addr = cJSON_GetObjectItem(value, "devExtAddr");
                         if (cJSON_IsString(js_dev_addr) && (js_dev_addr->valuestring != NULL)) {
                             (void)snprintf(g_sCurrentDeviceConfig.dev_ext_addr, sizeof(g_sCurrentDeviceConfig.dev_ext_addr), "%s", js_dev_addr->valuestring);
-                            (void)snprintf(dev_ext_addr, sizeof(dev_ext_addr), "%s", js_dev_addr->valuestring);
                         }
 
                         const cJSON *broker = cJSON_GetObjectItem(value, "broker");
