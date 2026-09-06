@@ -1,10 +1,15 @@
 #pragma once
 
 typedef enum{
-    DEVICE_MODE_UNCONNECTED,
-    DEVICE_MODE_CONNECT_AUTO,
-    DEVICE_MODE_CONNECT_MANUAL,
-    DEVICE_MODE_NORMAL
+    DEVICE_MODE_UNCONNECTED,    // 0
+    DEVICE_MODE_CONNECT_AUTO,   // 1
+    DEVICE_MODE_CONNECT_MANUAL, // 2
+    DEVICE_MODE_NORMAL,          // 3 bình thường 
+    DEVICE_MODE_LOCKED,            // 4 khóa tạm thời 
+    DEVICE_MODE_LOCKED_CHILD,     // 5 khóa trẻ em 
+    DEVICE_MODE_NIGHT,                // 6 cảnh báo ban đêm 
+    DEVICE_MODE_OFFLINE_CONTROL     // 7 điều khiển bằng bluetooth 
+
 } device_mode_t; 
 device_mode_t get_current_door_mode(void);
 void set_current_door_mode(device_mode_t mode);

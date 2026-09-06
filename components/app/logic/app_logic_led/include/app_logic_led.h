@@ -13,6 +13,17 @@
 extern "C" {
 #endif
 
+
+/* Định nghĩa sẵn các macro hoặc biến hằng số màu chuẩn */
+#define APP_LED_COLOR_RED      ((app_led_color_t){255, 0,   0})
+#define APP_LED_COLOR_GREEN    ((app_led_color_t){0,   255, 0})
+#define APP_LED_COLOR_BLUE     ((app_led_color_t){0,   0,   255})
+#define APP_LED_COLOR_YELLOW   ((app_led_color_t){255, 255, 0})
+#define APP_LED_COLOR_CYAN     ((app_led_color_t){0,   255, 255})
+#define APP_LED_COLOR_MAGENTA  ((app_led_color_t){255, 0,   255})
+#define APP_LED_COLOR_WHITE    ((app_led_color_t){255, 255, 255})
+#define APP_LED_COLOR_OFF      ((app_led_color_t){0,   0,   0})
+
 /** Dữ liệu lệnh LED gồm màu và độ sáng cần áp dụng. */
 typedef struct {
     app_led_color_t sColor;

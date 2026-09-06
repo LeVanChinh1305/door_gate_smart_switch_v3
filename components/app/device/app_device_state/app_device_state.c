@@ -8,7 +8,7 @@
 #include "freertos/semphr.h"
 #include "esp_log.h"
 
-static const char *TAG = "DEVICE_STATE";
+static const char *TAG = "APP_DEVICE_STATE";
 
 // Khởi tạo các trạng thái mặc định ban đầu theo yêu cầu hệ thống
 static device_mode_t g_eCurrentDoorMode = DEVICE_MODE_UNCONNECTED;     

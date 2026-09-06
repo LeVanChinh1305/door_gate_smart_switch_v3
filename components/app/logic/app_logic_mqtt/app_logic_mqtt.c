@@ -120,7 +120,7 @@ static void app_logic_mqtt_Task(void *pArg)
                         
                         if (strcmp(pcCmdName, "CmdGetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetData: tiến hành đọc thông tin thiết bị và phản hồi");
-
+                            
                         } 
                         else if (strcmp(pcCmdName, "CmdGetWifiInfo") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetWifiInfo");
@@ -133,9 +133,6 @@ static void app_logic_mqtt_Task(void *pArg)
                         }
                         else if(strcmp(pcCmdName, "CmdGetSensorConfig") ==0){
                             ESP_LOGI(TAG, "-> khớp lệnh CmdGetSensorConfig");
-                        }
-                        else if(strcmp(pcCmdName, "CmdGetDeviceInfo") ==0){
-                            ESP_LOGI(TAG, "-> khớp lệnh CmdGetDeviceInfo");
                         }
                         else if (strcmp(pcCmdName, "CmdSetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdSetData, tiến hành gọi hàm giải mã...");

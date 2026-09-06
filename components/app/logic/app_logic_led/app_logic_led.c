@@ -93,9 +93,7 @@ esp_err_t app_logic_led_Init(void)
     if (g_hLedCommandQueue == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreate(app_logic_led_Task, "led_logic",
-                    DF_APP_LOGIC_LED_TASK_STACK, NULL,
-                    DF_APP_LOGIC_LED_TASK_PRIORITY, &g_hLedTask) != pdPASS) {
+    if (xTaskCreate(app_logic_led_Task, "led_logic",DF_APP_LOGIC_LED_TASK_STACK, NULL,DF_APP_LOGIC_LED_TASK_PRIORITY, &g_hLedTask) != pdPASS) {
         vQueueDelete(g_hLedCommandQueue);
         g_hLedCommandQueue = NULL;
         return ESP_ERR_NO_MEM;

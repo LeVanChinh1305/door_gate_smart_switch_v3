@@ -13,5 +13,6 @@ idf_component_register(
         app_device_state  
         freertos 
         log 
+        app_led_state
         
 )
