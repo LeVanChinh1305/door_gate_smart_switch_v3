@@ -64,23 +64,20 @@ void app_main(void) {
 
   eRet = app_logic_buzzer_Init();
   if (eRet != ESP_OK) {
-    ESP_LOGE(TAG, "Khởi tạo logic buzzer thất bại! Mã lỗi: %s",
-             esp_err_to_name(eRet));
+    ESP_LOGE(TAG, "Khởi tạo logic buzzer thất bại! Mã lỗi: %s",esp_err_to_name(eRet));
     return;
   }
 
   eRet = app_logic_mqtt_Init();
   if (eRet != ESP_OK) {
-    ESP_LOGE(TAG, "Khởi tạo logic MQTT thất bại! Mã lỗi: %s",
-             esp_err_to_name(eRet));
+    ESP_LOGE(TAG, "Khởi tạo logic MQTT thất bại! Mã lỗi: %s",esp_err_to_name(eRet));
     return;
   }
 
   // 4. Khởi tạo Wi-Fi STA
   eRet = app_wifi_InitSta();
   if (eRet != ESP_OK) {
-    ESP_LOGW(TAG,
-             "Khởi tạo Wi-Fi STA gặp sự cố, kiểm tra trạng thái thiết bị...");
+    ESP_LOGW(TAG, "Khởi tạo Wi-Fi STA gặp sự cố, kiểm tra trạng thái thiết bị...");
   }
 
   // 5. Điều phối luồng khởi động dựa trên trạng thái thiết bị
@@ -91,10 +88,7 @@ void app_main(void) {
     ESP_LOGI(
         TAG,"Thiết bị đang ở chế độ UNCONNECTED, kiểm tra NVS cấu hình Wi-Fi...");
     if (!app_nvs_IsProvisionedWifiConfig()) {
-      ESP_LOGI(TAG,"Chưa có Wi-Fi trong NVS, chuyển sang chế độ tự động BluFi...");
-      set_current_door_mode(DEVICE_MODE_CONNECT_AUTO);
-      app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
-      (void)app_blufi_Init();
+      ESP_LOGI(TAG,"Chưa có Wi-Fi trong NVS, đang chờ lệnh kết nối thủ công/ tự động");
     } else {
       ESP_LOGI(TAG,"Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái Normal...");
       set_current_door_mode(DEVICE_MODE_LOCKED);

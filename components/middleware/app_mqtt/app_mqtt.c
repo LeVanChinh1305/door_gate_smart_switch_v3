@@ -131,6 +131,7 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         .credentials.authentication.password = g_sDeviceConfig.password,
         .task.stack_size = DF_TASK_STACK_LARGE, 
         .task.priority = DF_TASK_PRIO_NORMAL,   
+        .buffer.size = 4096,
     };
 
     g_xMqttClient = esp_mqtt_client_init(&sMqttCfg); 

@@ -370,3 +370,157 @@ esp_err_t app_nvs_LoadExtraConfig(app_extra_config_t *config) {
   nvs_close(hHandle);
   return eErr;
 }
+
+
+
+
+
+esp_err_t app_nvs_SaveSchedule(const app_schedule_item_t *psNewSchedule)
+{
+    if (psNewSchedule == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t xNvsHandle;
+    /* Mở NVS Namespace (Giả sử bạn đang dùng macro DF_NVS_NAMESPACE) */
+    esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &xNvsHandle);
+    if (eErr != ESP_OK) {
+        ESP_LOGE(TAG, "Không thể mở NVS để lưu lịch hẹn giờ: %s", esp_err_to_name(eErr));
+        return eErr;
+    }
+
+    /* Khởi tạo mảng chứa tối đa 10 lịch */
+    app_schedule_item_t asSchedules[DF_MAX_SCHEDULES];
+    size_t zLength = sizeof(asSchedules);
+    uint8_t u8ScheduleCount = 0U;
+
+    (void)memset(asSchedules, 0, sizeof(asSchedules));
+
+    /* 1. Đọc mảng lịch hiện tại đang có trong NVS (nếu có) */
+    eErr = nvs_get_blob(xNvsHandle, "schedules", asSchedules, &zLength);
+    if (eErr == ESP_OK) {
+        /* Tính ra số lượng lịch đang có dựa trên kích thước mảng đọc được */
+        u8ScheduleCount = (uint8_t)(zLength / sizeof(app_schedule_item_t));
+    } else if (eErr != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGE(TAG, "Lỗi đọc blob schedules: %s", esp_err_to_name(eErr));
+        nvs_close(xNvsHandle);
+        return eErr;
+    }
+
+    /* 2. Kiểm tra xem ID này đã tồn tại chưa để Cập nhật */
+    bool bIsUpdated = false;
+    for (uint8_t i = 0; i < u8ScheduleCount; i++) {
+        if (asSchedules[i].u32Id == psNewSchedule->u32Id) {
+            (void)memcpy(&asSchedules[i], psNewSchedule, sizeof(app_schedule_item_t));
+            bIsUpdated = true;
+            ESP_LOGI(TAG, "Cập nhật thành công lịch ID: %u", (unsigned int)psNewSchedule->u32Id);
+            break;
+        }
+    }
+
+    /* 3. Nếu chưa tồn tại, tiến hành Thêm mới vào cuối mảng */
+    if (!bIsUpdated) {
+        if (u8ScheduleCount < DF_MAX_SCHEDULES) {
+            (void)memcpy(&asSchedules[u8ScheduleCount], psNewSchedule, sizeof(app_schedule_item_t));
+            u8ScheduleCount++;
+            zLength = (size_t)u8ScheduleCount * sizeof(app_schedule_item_t);
+            ESP_LOGI(TAG, "Thêm mới thành công lịch ID: %u (Tổng: %d/%d)", 
+                     (unsigned int)psNewSchedule->u32Id, u8ScheduleCount, DF_MAX_SCHEDULES);
+        } else {
+            ESP_LOGW(TAG, "Danh sách hẹn giờ đã đầy (%d), không thể thêm mới!", DF_MAX_SCHEDULES);
+            nvs_close(xNvsHandle);
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    /* 4. Ghi toàn bộ mảng trở lại NVS và Commit */
+    eErr = nvs_set_blob(xNvsHandle, "schedules", asSchedules, zLength);
+    if (eErr == ESP_OK) {
+        eErr = nvs_commit(xNvsHandle);
+    }
+
+    nvs_close(xNvsHandle);
+    return eErr;
+}
+
+
+
+esp_err_t app_nvs_DeleteSchedule(uint32_t u32Id)
+{
+  nvs_handle_t xNvsHandle;
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &xNvsHandle);
+  if (eErr != ESP_OK) {
+    ESP_LOGE(TAG, "Không thể mở NVS để xóa lịch: %s", esp_err_to_name(eErr));
+    return eErr;
+  }
+
+  app_schedule_item_t asSchedules[DF_MAX_SCHEDULES];
+  size_t zLength = sizeof(asSchedules);
+  uint8_t u8ScheduleCount = 0U;
+  bool bIsFound = false;
+
+  (void)memset(asSchedules, 0, sizeof(asSchedules));
+
+  /* Đọc mảng lịch hiện hành */
+  eErr = nvs_get_blob(xNvsHandle, "schedules", asSchedules, &zLength);
+  if (eErr == ESP_OK) {
+    u8ScheduleCount = (uint8_t)(zLength / sizeof(app_schedule_item_t));
+    
+    /* Tìm và xóa phần tử */
+    for (uint8_t i = 0; i < u8ScheduleCount; i++) {
+        if (asSchedules[i].u32Id == u32Id) {
+            bIsFound = true;
+            /* Dịch các phần tử phía sau lên trước 1 ô để lấp chỗ trống */
+            for (uint8_t j = i; j < u8ScheduleCount - 1; j++) {
+                (void)memcpy(&asSchedules[j], &asSchedules[j + 1], sizeof(app_schedule_item_t));
+            }
+            u8ScheduleCount--;
+            break;
+        }
+    }
+
+    if (bIsFound) {
+      if (u8ScheduleCount == 0) {
+        /* Nếu mảng rỗng, xóa hoàn toàn Key cho sạch bộ nhớ */
+        eErr = nvs_erase_key(xNvsHandle, "schedules");
+      } else {
+        /* Ghi lại mảng đã rút gọn */
+        zLength = (size_t)u8ScheduleCount * sizeof(app_schedule_item_t);
+        eErr = nvs_set_blob(xNvsHandle, "schedules", asSchedules, zLength);
+      }
+      
+      if (eErr == ESP_OK) {
+        eErr = nvs_commit(xNvsHandle);
+        ESP_LOGI(TAG, "Đã xóa thành công lịch hẹn giờ ID: %u", (unsigned int)u32Id);
+      }
+    } else {
+      ESP_LOGW(TAG, "Không tìm thấy lịch hẹn giờ ID: %u để xóa", (unsigned int)u32Id);
+      eErr = ESP_ERR_NOT_FOUND;
+    }
+  } else {
+    ESP_LOGW(TAG, "NVS chưa có lịch hẹn giờ nào!");
+  }
+
+  nvs_close(xNvsHandle);
+  return eErr;
+}
+
+
+esp_err_t app_nvs_DeleteAllSchedules(void)
+{
+    nvs_handle_t xNvsHandle;
+    esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &xNvsHandle);
+    if (eErr != ESP_OK) return eErr;
+
+    /* Xóa hoàn toàn Key lưu trữ lịch khỏi bộ nhớ */
+    eErr = nvs_erase_key(xNvsHandle, "schedules");
+    if (eErr == ESP_OK) {
+        nvs_commit(xNvsHandle);
+        ESP_LOGI(TAG, "Đã xóa TẤT CẢ lịch hẹn giờ trong NVS");
+    } else if (eErr == ESP_ERR_NVS_NOT_FOUND) {
+        eErr = ESP_OK; /* Nếu chưa có lịch nào thì vẫn coi như xóa thành công */
+    }
+    
+    nvs_close(xNvsHandle);
+    return eErr;
+}

@@ -7,4 +7,6 @@ idf_component_register(
         app_mqtt 
         mqtt_vconnex_decrypt
         json 
+        esp_wifi
+        app_wifi
 )

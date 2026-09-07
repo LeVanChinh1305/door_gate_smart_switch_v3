@@ -88,6 +88,13 @@ static void app_led_state_Task(void *pArg)
                 break;
 
             case E_LED_STATE_NORMAL_IDLE:
+                if (bToggle) {
+                    (void)app_logic_led_SetColor(APP_LED_COLOR_WHITE);
+                } else{
+                    (void)app_logic_led_SetColor(APP_LED_COLOR_OFF);
+                }
+                vTaskDelay(pdMS_TO_TICKS(500U));
+                break;
             default:
                 /* Trạng thái bình thường: sáng nhẹ hoặc tắt tùy thiết kế */
                 (void)app_logic_led_SetColor(APP_LED_COLOR_OFF);

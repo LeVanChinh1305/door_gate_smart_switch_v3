@@ -19,8 +19,8 @@ static const char *TAG = "app_led";
 #define DF_LED_T1H_TICKS 8U
 #define DF_LED_T1L_TICKS 4U
 #define DF_LED_RESET_MS 1U
-#define DF_LED_TIMEOUT_MS 100U
-#define DF_LED_MEM_BLOCK_SYMBOLS 64U
+#define DF_LED_TIMEOUT_MS 200U
+#define DF_LED_MEM_BLOCK_SYMBOLS 48U
 #define DF_LED_TRANS_QUEUE_DEPTH 4U
 
 static rmt_channel_handle_t g_rmt_channel = NULL;

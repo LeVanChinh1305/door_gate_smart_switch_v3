@@ -132,6 +132,37 @@ esp_err_t app_nvs_SaveExtraConfig(const app_extra_config_t *config);
 esp_err_t app_nvs_LoadExtraConfig(app_extra_config_t *config);
 
 
+
+#define DF_MAX_SCHEDULES 10U // Hỗ trợ tối đa 10 lịch hẹn giờ
+/**
+ * @brief Cấu trúc lưu trữ 1 lịch hẹn giờ tối ưu cho NVS Flash
+ */
+typedef struct {
+    uint32_t u32Id;               // ID của lịch (VD: 4640)
+    uint8_t  u8Activate;          // Trạng thái (1 = Bật, 0 = Tắt)
+    uint8_t  u8LoopDays;          // Bitmask lặp lại (127 = Cả tuần, 0 = Chạy 1 lần)
+    uint8_t  u8Hour;              // Giờ thực thi (0-23)
+    uint8_t  u8Minute;            // Phút thực thi (0-59)
+    char     acParam[16];         // Lệnh điều khiển (VD: "gate_open")
+    int32_t  i32Value;            // Giá trị lệnh (VD: 1, 0, hoặc %)
+} app_schedule_item_t;
+
+/**
+ * @brief   Lưu hoặc cập nhật một lịch hẹn giờ vào NVS
+ * @param   psNewSchedule Con trỏ trỏ tới cấu trúc lịch mới cần lưu
+ * @return  esp_err_t ESP_OK nếu thành công
+ */
+esp_err_t app_nvs_SaveSchedule(const app_schedule_item_t *psNewSchedule);
+
+
+/**
+ * @brief   Xóa một lịch hẹn giờ khỏi NVS dựa vào ID
+ * @param   u32Id ID của lịch cần xóa
+ * @return  esp_err_t ESP_OK nếu tìm thấy và xóa thành công, ESP_ERR_NOT_FOUND nếu không có
+ */
+esp_err_t app_nvs_DeleteSchedule(uint32_t u32Id);
+esp_err_t app_nvs_DeleteAllSchedules(void);
+
 #ifdef __cplusplus
 }
 #endif

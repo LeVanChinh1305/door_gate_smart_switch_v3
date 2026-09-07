@@ -5,6 +5,8 @@
 #include "mqtt_vconnex_decrypt.h"
 #include "cJSON.h"
 #include <sys/time.h>
+#include "esp_wifi.h"
+#include "app_wifi.h"
 
 static const char *TAG = "APP_MQTT_PUB";
 
@@ -39,8 +41,7 @@ esp_err_t app_logic_mqtt_publisher_SendResponse(const char *pcPayload)
     return ESP_OK;
 }
 
-esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gate2, uint8_t u8Gate3, uint8_t u8CurrentLevel)
-{
+esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gate2, uint8_t u8Gate3, uint8_t u8CurrentLevel){
     const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
     if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
         return ESP_FAIL;
@@ -102,4 +103,132 @@ esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gat
     cJSON_Delete(jsRoot);
     
     return ESP_OK;
+}
+
+
+esp_err_t app_logic_mqtt_publisher_ReportWifiInfo(void)
+{
+    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
+        return ESP_FAIL;
+    }
+
+    /* 1. Lấy thông tin WiFi từ hàm hệ thống ESP-IDF */
+    wifi_ap_record_t sApInfo;
+    char acSsid[33] = "DISCONNECTED";
+    uint8_t u8RssiLevel = 0U;
+
+    if (esp_wifi_sta_get_ap_info(&sApInfo) == ESP_OK) {
+        snprintf(acSsid, sizeof(acSsid), "%s", sApInfo.ssid);
+        
+        /* 2. Quy đổi cường độ tín hiệu (dBm) sang thang điểm 0-4 vạch */
+        if (sApInfo.rssi >= -55) {
+            u8RssiLevel = 4U;
+        } else if (sApInfo.rssi >= -70) {
+            u8RssiLevel = 3U;
+        } else if (sApInfo.rssi >= -80) {
+            u8RssiLevel = 2U;
+        } else if (sApInfo.rssi >= -90) {
+            u8RssiLevel = 1U;
+        } else {
+            u8RssiLevel = 0U;
+        }
+    }
+
+    /* 3. Lấy Timestamp */
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
+
+    /* 4. Đóng gói JSON theo đúng chuẩn không mã hóa devV */
+    char acResponse[512];
+    snprintf(acResponse, sizeof(acResponse),
+             "{"
+             "\"name\":\"CmdGetWifiInfo\","
+             "\"devT\":%u,"
+             "\"devExtAddr\":\"%s\","
+             "\"timeStamp\":%llu,"
+             "\"devV\":["
+             "{\"param\":\"wifi_name\",\"value\":\"%s\"},"
+             "{\"param\":\"rssi\",\"value\":%u}"
+             "]"
+             "}",
+             (unsigned int)psConfig->dev_type,
+             psConfig->dev_ext_addr,
+             (unsigned long long)u64Timestamp,
+             acSsid,
+             u8RssiLevel);
+
+    /* 5. Đẩy bản tin lên broker */
+    return app_logic_mqtt_publisher_SendResponse(acResponse);
+}
+
+
+
+esp_err_t app_logic_mqtt_publisher_ReportDeviceInfo(void)
+{
+    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
+        return ESP_FAIL;
+    }
+
+    /* 1. Lấy Timestamp hiện tại */
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
+
+    /* 2. Đóng gói JSON (Sử dụng chuỗi phiên bản tĩnh) */
+    char acResponse[512];
+    snprintf(acResponse, sizeof(acResponse),
+             "{"
+             "\"name\":\"CmdGetDeviceInfo\","
+             "\"devT\":%u,"
+             "\"devExtAddr\":\"%s\","
+             "\"timeStamp\":%llu,"
+             "\"devV\":["
+             "{\"param\":\"wifi_version\",\"value\":\"1.1\"},"
+             "{\"param\":\"ble_version\",\"value\":\"1.1\"}"
+             "]"
+             "}",
+             (unsigned int)psConfig->dev_type,
+             psConfig->dev_ext_addr,
+             (unsigned long long)u64Timestamp);
+
+    /* 3. Gửi bản tin lên broker */
+    return app_logic_mqtt_publisher_SendResponse(acResponse);
+}
+
+
+esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, uint32_t u32Id, int iErrorCode)
+{
+    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
+        return ESP_FAIL;
+    }
+
+    /* Lấy Timestamp hiện tại */
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
+
+    /* Đóng gói JSON theo đúng chuẩn của tài liệu Vconnex */
+    char acResponse[256];
+    snprintf(acResponse, sizeof(acResponse),
+             "{"
+             "\"name\":\"%s\","
+             "\"devT\":%u,"
+             "\"devExtAddr\":\"%s\","
+             "\"timestamp\":%llu,"
+             "\"id\":%u,"
+             "\"errorCode\":%d"
+             "}",
+             pcCmdName,
+             (unsigned int)psConfig->dev_type,
+             psConfig->dev_ext_addr,
+             (unsigned long long)u64Timestamp,
+             (unsigned int)u32Id,
+             iErrorCode);
+
+    /* Đẩy bản tin lên broker */
+    return app_logic_mqtt_publisher_SendResponse(acResponse);
 }

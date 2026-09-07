@@ -19,6 +19,7 @@
 #include "app_led_state.h"
 #include "app_logic_mqtt_publisher.h" 
 #include "app_logic_extra_config.h"
+#include <time.h>
 
 static const char *TAG = "APP_LOGIC_MQTT";
 
@@ -169,6 +170,196 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
 }
 
 /**
+ * @brief   Giải mã và xử lý bản tin CmdAddSchedule (Hẹn giờ)
+ * @param   jsRoot Con trỏ cJSON trỏ tới gốc của gói tin JSON.
+ */
+static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
+{
+    if (jsRoot == NULL) {
+        return;
+    }
+
+    /* 1. Tìm mảng valueEncrypt (Dự phòng cả 2 trường hợp JSON từ Server) */
+    const cJSON *jsEncryptArray = cJSON_GetObjectItem(jsRoot, "valueEncrypt");
+    if (!cJSON_IsArray(jsEncryptArray)) {
+        const cJSON *jsValue = cJSON_GetObjectItem(jsRoot, "value");
+        if (jsValue != NULL) {
+            jsEncryptArray = cJSON_GetObjectItem(jsValue, "valueEncrypt");
+        }
+    }
+
+    if (!cJSON_IsArray(jsEncryptArray)) {
+        ESP_LOGW(TAG, "Không tìm thấy mảng valueEncrypt trong CmdAddSchedule");
+        return;
+    }
+
+    int iCipherLen = cJSON_GetArraySize(jsEncryptArray);
+    if (iCipherLen <= 0 || (iCipherLen % 16) != 0 || iCipherLen >= (int)DF_MQTT_CRYPTO_MAX_BUFFER_SIZE) {
+        ESP_LOGE(TAG, "Độ dài ciphertext hẹn giờ không hợp lệ: %d", iCipherLen);
+        return;
+    }
+
+    /* 2. Ép kiểu dữ liệu mảng JSON sang mảng byte (Không dùng malloc)[cite: 21] */
+    uint8_t au8Ciphertext[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
+    (void)memset(au8Ciphertext, 0, sizeof(au8Ciphertext));
+
+    for (int i = 0; i < iCipherLen; i++) {
+        const cJSON *jsItem = cJSON_GetArrayItem(jsEncryptArray, i);
+        au8Ciphertext[i] = cJSON_IsNumber(jsItem) ? (uint8_t)jsItem->valueint : 0U;
+    }
+
+    /* 3. Lấy API Secret Key để giải mã */
+    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    if (psConfig == NULL || strlen(psConfig->api_secret_key) < 32U) {
+        ESP_LOGE(TAG, "Lỗi API Secret Key không hợp lệ");
+        return;
+    }
+
+    char acPlaintextBuffer[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
+    size_t zPlaintextLen = 0U;
+    (void)memset(acPlaintextBuffer, 0, sizeof(acPlaintextBuffer));
+
+    /* Gọi API giải mã AES-256-CBC chuẩn của hệ thống*/
+    esp_err_t eErr = decrypt_vconnex_payload(au8Ciphertext, (size_t)iCipherLen,
+                                             psConfig->api_secret_key,
+                                             acPlaintextBuffer, sizeof(acPlaintextBuffer),
+                                             &zPlaintextLen);
+
+    if (eErr == ESP_OK && zPlaintextLen > 0U) {
+        ESP_LOGI(TAG, "=> GIẢI MÃ HẸN GIỜ THÀNH CÔNG: %s", acPlaintextBuffer);
+        cJSON *jsParsed = cJSON_Parse(acPlaintextBuffer);
+        if (jsParsed != NULL) {
+            app_schedule_item_t sNewSchedule;
+            (void)memset(&sNewSchedule, 0, sizeof(app_schedule_item_t));
+
+            /* Lấy ID và trạng thái kích hoạt */
+            cJSON *jsId = cJSON_GetObjectItem(jsParsed, "id");
+            cJSON *jsActivate = cJSON_GetObjectItem(jsParsed, "activate");
+            sNewSchedule.u32Id = (jsId && cJSON_IsNumber(jsId)) ? (uint32_t)jsId->valueint : 0U;
+            sNewSchedule.u8Activate = (jsActivate && cJSON_IsNumber(jsActivate)) ? (uint8_t)jsActivate->valueint : 1U;
+
+            /* Truy xuất khối Điều kiện (Condition) để tính giờ */
+            cJSON *jsCondition = cJSON_GetObjectItem(jsParsed, "condition");
+            if (jsCondition) {
+                cJSON *jsCondValues = cJSON_GetObjectItem(jsCondition, "values");
+                cJSON *jsCondVal0 = cJSON_GetArrayItem(jsCondValues, 0);
+                if (jsCondVal0) {
+                    cJSON *jsLoopDays = cJSON_GetObjectItem(jsCondVal0, "loopDays");
+                    sNewSchedule.u8LoopDays = (jsLoopDays && cJSON_IsNumber(jsLoopDays)) ? (uint8_t)jsLoopDays->valueint : 0U;
+
+                    /* Xử lý executionTime (Unix Timestamp) */
+                    cJSON *jsExeTime = cJSON_GetObjectItem(jsCondVal0, "executionTime");
+                    if (jsExeTime && cJSON_IsNumber(jsExeTime)) {
+                        /* Chuyển đổi timestamp Unix (Giây) sang cấu trúc thời gian cục bộ (localtime) */
+                        time_t tExecution = (time_t)jsExeTime->valueint;
+                        struct tm sTimeInfo;
+                        tExecution += (7 * 3600); // Bù UTC+7 (Việt Nam)
+                        gmtime_r(&tExecution, &sTimeInfo);
+                        
+                        sNewSchedule.u8Hour = (uint8_t)sTimeInfo.tm_hour;
+                        sNewSchedule.u8Minute = (uint8_t)sTimeInfo.tm_min;
+                        ESP_LOGI(TAG, "-> Đặt lịch vào lúc: %02d:%02d (Loop: %d)", sNewSchedule.u8Hour, sNewSchedule.u8Minute, sNewSchedule.u8LoopDays);
+                    }
+                }
+            }
+
+            /* Truy xuất khối Hành động (Action) */
+            cJSON *jsAction = cJSON_GetObjectItem(jsParsed, "action");
+            cJSON *jsAction0 = cJSON_GetArrayItem(jsAction, 0);
+            if (jsAction0) {
+                cJSON *jsDevV = cJSON_GetObjectItem(jsAction0, "devV");
+                cJSON *jsDevV0 = cJSON_GetArrayItem(jsDevV, 0);
+                if (jsDevV0) {
+                    cJSON *jsParam = cJSON_GetObjectItem(jsDevV0, "param");
+                    cJSON *jsValue = cJSON_GetObjectItem(jsDevV0, "value");
+                    
+                    if (jsParam && cJSON_IsString(jsParam)) {
+                        snprintf(sNewSchedule.acParam, sizeof(sNewSchedule.acParam), "%s", jsParam->valuestring);
+                    }
+                    if (jsValue && cJSON_IsNumber(jsValue)) {
+                        sNewSchedule.i32Value = (int32_t)jsValue->valueint;
+                    }
+                    ESP_LOGI(TAG, "-> Lệnh thực thi: %s = %d", sNewSchedule.acParam, (int)sNewSchedule.i32Value);
+                }
+            }
+
+            /* TODO: Gọi hàm lưu sNewSchedule vào bộ nhớ NVS tại đây */
+            esp_err_t err = app_nvs_SaveSchedule(&sNewSchedule);
+            if (err == ESP_OK) {
+                ESP_LOGI(TAG, "Đã lưu lịch hẹn giờ vào NVS thành công!");
+                /* Phản hồi thành công: 50000 */
+                app_logic_mqtt_publisher_ReportScheduleResult("CmdAddSchedule", sNewSchedule.u32Id, 50000);
+            } else if (err == ESP_ERR_NO_MEM) {
+                /* Phản hồi lỗi đầy bộ nhớ: 50007 */
+                app_logic_mqtt_publisher_ReportScheduleResult("CmdAddSchedule", sNewSchedule.u32Id, 50007);
+            } else {
+                /* Phản hồi lỗi dữ liệu khác: 50005 */
+                app_logic_mqtt_publisher_ReportScheduleResult("CmdAddSchedule", sNewSchedule.u32Id, 50005);
+            }
+            cJSON_Delete(jsParsed);
+        }
+    } else {
+        ESP_LOGE(TAG, "Giải mã CmdAddSchedule thất bại, mã lỗi: %d", (int)eErr);
+    }
+}
+
+/**
+ * @brief   Giải mã và xử lý bản tin CmdDelSchedule (Xóa hẹn giờ)
+ * @param   jsRoot Con trỏ cJSON trỏ tới gốc của gói tin JSON.
+ */
+static void app_logic_mqtt_HandleDeleteSchedule(const cJSON *jsRoot)
+{
+    if (jsRoot == NULL) return;
+
+    int iId = 0;
+    bool bHasId = false;
+
+    const cJSON *jsEncryptArray = cJSON_GetObjectItem(jsRoot, "valueEncrypt");
+    if (!cJSON_IsArray(jsEncryptArray)) {
+        const cJSON *jsValue = cJSON_GetObjectItem(jsRoot, "value");
+        if (jsValue != NULL) {
+            jsEncryptArray = cJSON_GetObjectItem(jsValue, "valueEncrypt");
+        }
+    }
+
+    /* 1. Lấy ID từ bản tin (Hỗ trợ cả 2 dạng: không mã hóa và mã hóa) */
+    if (!cJSON_IsArray(jsEncryptArray)) {
+        const cJSON *jsValue = cJSON_GetObjectItem(jsRoot, "value");
+        if (jsValue != NULL) {
+            cJSON *jsId = cJSON_GetObjectItem(jsValue, "id");
+            if (cJSON_IsNumber(jsId)) {
+                iId = jsId->valueint;
+                bHasId = true;
+            }
+        }
+    } else {
+        /* (Tùy chọn: Giữ lại khối logic giải mã au8Ciphertext bằng mbedTLS ở đây nếu Server có mã hóa) */
+        // ... (Code giải mã) ... 
+    }
+
+    /* 2. Xử lý xóa và phản hồi */
+    if (bHasId) {
+        esp_err_t eErr = ESP_OK;
+        
+        if (iId == -1) {
+            ESP_LOGI(TAG, "-> Nhận lệnh xóa TẤT CẢ lịch hẹn giờ (id = -1)");
+            eErr = app_nvs_DeleteAllSchedules();
+        } else {
+            eErr = app_nvs_DeleteSchedule((uint32_t)iId);
+        }
+
+        /* 3. Phản hồi kết quả về App */
+        /* Mẹo: Dù NVS báo không tìm thấy lịch cũ (ESP_ERR_NOT_FOUND), 
+           chúng ta vẫn phản hồi mã thành công 50000 để App gỡ giao diện chờ. */
+        if (eErr == ESP_OK || eErr == ESP_ERR_NOT_FOUND) {
+            (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdDeleteSchedule", (uint32_t)iId, 50000);
+            ESP_LOGI(TAG, "Đã gửi bản tin phản hồi xóa lịch (50000) thành công");
+        } else {
+            (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdDeleteSchedule", (uint32_t)iId, 50005);
+        }
+    }
+}
+/**
  * @brief   Task nền chuyên trách nhận bản tin từ Queue, phân loại lệnh và điều phối xử lý.
  * @param   pArg Tham số truyền vào task (không sử dụng).
  */
@@ -195,6 +386,7 @@ static void app_logic_mqtt_Task(void *pArg)
                         } 
                         else if (strcmp(pcCmdName, "CmdGetWifiInfo") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetWifiInfo");
+                            (void)app_logic_mqtt_publisher_ReportWifiInfo();
                         } 
                         else if (strcmp(pcCmdName, "CmdGetExtraConfig") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetExtraConfig");
@@ -217,14 +409,20 @@ static void app_logic_mqtt_Task(void *pArg)
                             app_logic_extra_config_ProcessSet(jsValue ? jsValue : jsRoot); 
                         }else if(strcmp(pcCmdName, "CmdGetDeviceInfo") ==0){
                             ESP_LOGI(TAG, "-> khớp lệnh CmdGetDeviceInfo");
-                        }
-                        else if(strcmp(pcCmdName, "CmdGetSensorConfig") ==0){
+                            (void)app_logic_mqtt_publisher_ReportDeviceInfo();
+                        } else if(strcmp(pcCmdName, "CmdGetSensorConfig") ==0){
                             ESP_LOGI(TAG, "-> khớp lệnh CmdGetSensorConfig");
-                        }
-                        else if (strcmp(pcCmdName, "CmdSetData") == 0) {
+                        }else if (strcmp(pcCmdName, "CmdSetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdSetData, tiến hành gọi hàm giải mã...");
                             app_logic_mqtt_HandleSetData(jsValue);
-                        } 
+                        }else if (strcmp(pcCmdName, "CmdAddSchedule") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdAddSchedule, đang giải mã...");
+                            /* Truyền thẳng jsRoot vào hàm để hàm tự rà soát cấu trúc */
+                            app_logic_mqtt_HandleAddSchedule(jsRoot);
+                        }else if (strcmp(pcCmdName, "CmdDeleteSchedule") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdDeleteSchedule, đang xử lý xóa...");
+                            app_logic_mqtt_HandleDeleteSchedule(jsRoot);
+                        }
                         else {
                             ESP_LOGW(TAG, "-> Lệnh MQTT chưa được định nghĩa: %s", pcCmdName);
                         }

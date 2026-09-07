@@ -15,8 +15,7 @@ esp_err_t decrypt_vconnex_payload(const uint8_t *pu8Ciphertext,
 								  const char *pcApiSecretKey,
 								  char *pcPlaintextOut,
 								  size_t zPlaintextOutMaxLen,
-								  size_t *pzPlaintextLenOut)
-{
+								  size_t *pzPlaintextLenOut){
 	int iMbedResult = -1;
 	size_t zKeyLen = 0U;
 	size_t zPlaintextLen = 0U;
