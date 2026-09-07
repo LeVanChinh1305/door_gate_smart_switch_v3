@@ -78,6 +78,16 @@ esp_err_t app_logic_relay_EmergencyStop(void);
  */
 esp_err_t app_logic_relay_SendCommand(e_app_relay_cmd_t eCommand);
 
+
+/**
+ * @brief Lấy vị trí phần trăm hiện tại của cửa
+ * @return int Mức cửa hiện tại (0-100)
+ */
+uint8_t app_logic_relay_GetCurrentLevel(void);
+
+
+esp_err_t app_logic_relay_SetLevel(uint8_t u8Level);
+
 #ifdef __cplusplus
 }
 #endif

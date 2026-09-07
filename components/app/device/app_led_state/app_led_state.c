@@ -60,6 +60,32 @@ static void app_led_state_Task(void *pArg)
                 }
                 vTaskDelay(pdMS_TO_TICKS(200U));
                 break;
+            case E_LED_STATE_GATE_UP:
+                (void)app_logic_led_SetPixelColor(0, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(1, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(2, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(2, APP_LED_COLOR_GREEN); // Chỉ bật LED 0
+                (void)app_logic_led_Show();
+                vTaskDelay(pdMS_TO_TICKS(500U));
+                break;
+
+            case E_LED_STATE_GATE_DOWN:
+                (void)app_logic_led_SetPixelColor(0, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(1, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(2, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(0, APP_LED_COLOR_GREEN);   // Chỉ bật LED 1
+                (void)app_logic_led_Show();
+                vTaskDelay(pdMS_TO_TICKS(500U));
+                break;
+
+            case E_LED_STATE_GATE_STOP:
+                (void)app_logic_led_SetPixelColor(0, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(1, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(2, APP_LED_COLOR_OFF);
+                (void)app_logic_led_SetPixelColor(1, APP_LED_COLOR_GREEN); // Chỉ bật LED 2
+                (void)app_logic_led_Show();
+                vTaskDelay(pdMS_TO_TICKS(500U));
+                break;
 
             case E_LED_STATE_NORMAL_IDLE:
             default:

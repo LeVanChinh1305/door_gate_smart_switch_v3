@@ -56,8 +56,7 @@ void app_main(void) {
 
   eRet = app_logic_led_Init();
   if (eRet != ESP_OK) {
-    ESP_LOGE(TAG, "Khởi tạo logic LED thất bại! Mã lỗi: %s",
-             esp_err_to_name(eRet));
+    ESP_LOGE(TAG, "Khởi tạo logic LED thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
     return;
   }
   app_led_state_Init();

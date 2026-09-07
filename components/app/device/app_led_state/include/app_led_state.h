@@ -23,6 +23,9 @@ typedef enum {
     E_LED_STATE_LOCKED_CHILD,       // Khóa trẻ em
     E_LED_STATE_WARNING,            // Cảnh báo (An ninh / Xô lô / Còi hú)
     E_LED_STATE_OTA,                // Đang cập nhật firmware OTA
+    E_LED_STATE_GATE_UP,     //  Đang mở
+    E_LED_STATE_GATE_DOWN,   //  Đang đóng
+    E_LED_STATE_GATE_STOP,   //  Dừng
     E_LED_STATE_MAX
 } e_led_device_state_t;
 

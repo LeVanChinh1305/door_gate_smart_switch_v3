@@ -58,6 +58,11 @@ esp_err_t app_logic_led_SetBrightness(uint8_t u8Brightness);
  */
 esp_err_t app_logic_led_Show(void);
 
+/**
+ * @brief lệnh điều khiển từng LED đơn lẻ dùng cho trường hợp điều khiển 
+ */
+esp_err_t app_logic_led_SetPixelColor(uint8_t u8LedIndex, app_led_color_t sColor);
+
 #ifdef __cplusplus
 }
 #endif

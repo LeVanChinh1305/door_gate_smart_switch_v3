@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+#define DF_APP_STORAGE_KEY_EXTRA_CONFIG "extra_cfg"
+
 #define DF_APP_STORAGE_NVS_NAMESPACE       "app_storage" // vị trí lưu trữ trong NVS
 #define DF_APP_STORAGE_KEY_PROVISIONED     "provisioned" // đánh dấu đã lưu cấu hình Wi-Fi
 #define DF_APP_STORAGE_KEY_WIFI_SSID       "wifi_ssid"   // tên mạng Wi-Fi (SSID)
@@ -70,6 +72,65 @@ esp_err_t app_nvs_LoadDeviceConfig(app_nvs_device_config_t *config);
 
 // Kiểm tra đã có device config trong NVS chưa
 bool app_nvs_IsProvisionedDeviceConfig(void);
+
+
+// Cấu trúc lưu trữ Extra Config
+typedef struct {
+  uint8_t buzzerEnb;
+  uint8_t ledEnb;
+  uint32_t ledRgbOn;
+  uint32_t ledRgbOff;
+  uint8_t led_lightness;
+  
+  uint8_t gate_1_type;
+  uint8_t gate_1_control_mode;
+  uint8_t gate_1_led_off;
+  uint32_t gate_1_rgb_on;
+  uint32_t gate_1_rgb_off;
+  
+  uint8_t gate_2_type;
+  uint8_t gate_2_control_mode;
+  uint8_t gate_2_led_off;
+  uint32_t gate_2_rgb_on;
+  uint32_t gate_2_rgb_off;
+
+  uint8_t gate_3_type;
+  uint8_t gate_3_control_mode;
+  uint8_t gate_3_led_off;
+  uint32_t gate_3_rgb_on;
+  uint32_t gate_3_rgb_off;
+
+  uint8_t nightModeEnb;
+  uint32_t nightBegin;
+  uint32_t nightEnd;
+  int8_t nightTz;
+  
+  uint8_t warningEnb;
+  uint32_t warningBegin;
+  uint32_t warningEnd;
+
+  uint8_t switch_1_lightness;
+  uint8_t switch_2_lightness;
+  uint8_t switch_3_lightness;
+
+  uint8_t anti_animal_enb;
+  uint32_t anti_animal_lock_time;
+  uint32_t gate_countdown;
+  uint32_t sgmCycle;
+  uint32_t sgmCycleGap;
+  uint8_t sgmUseCycleGap;
+  uint8_t resetMode;
+  uint8_t wlanMode;
+  uint8_t lockRFEnb;
+  uint32_t lockRFBegin;
+  uint32_t lockRFEnd;
+} app_extra_config_t;
+
+extern app_extra_config_t g_sExtraConfig;
+
+esp_err_t app_nvs_SaveExtraConfig(const app_extra_config_t *config);
+esp_err_t app_nvs_LoadExtraConfig(app_extra_config_t *config);
+
 
 #ifdef __cplusplus
 }

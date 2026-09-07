@@ -19,13 +19,15 @@ static const char *TAG = "APP_LOGIC_LED";
 typedef enum {
     E_APP_LOGIC_LED_CMD_SET_COLOR = 0,
     E_APP_LOGIC_LED_CMD_SET_BRIGHTNESS,
-    E_APP_LOGIC_LED_CMD_SHOW
+    E_APP_LOGIC_LED_CMD_SHOW, 
+    E_APP_LOGIC_LED_CMD_SET_PIXEL
 } e_app_logic_led_cmd_t; 
 
 typedef struct {
     e_app_logic_led_cmd_t eType;
     app_led_color_t sColor;
     uint8_t u8Brightness;
+    uint8_t u8LedIndex; 
 } app_logic_led_queue_item_t;
 
 static QueueHandle_t g_hLedCommandQueue = NULL;
@@ -50,6 +52,8 @@ static void app_logic_led_Task(void *pArg)
                 eErr = app_led_SetBrightness(sItem.u8Brightness);
             } else if (sItem.eType == E_APP_LOGIC_LED_CMD_SHOW) {
                 eErr = app_led_Show();
+            } else if(sItem.eType == E_APP_LOGIC_LED_CMD_SET_PIXEL){
+                eErr = app_led_SetPixelRgb((int)sItem.u8LedIndex, sItem.sColor);
             } else {
                 eErr = ESP_ERR_INVALID_ARG;
             }
@@ -139,4 +143,14 @@ esp_err_t app_logic_led_Show(void)
 {
     app_logic_led_queue_item_t sItem = {.eType = E_APP_LOGIC_LED_CMD_SHOW};
     return app_logic_led_SendItem(&sItem);
+}
+
+
+esp_err_t app_logic_led_SetPixelColor(uint8_t u8LedIndex, app_led_color_t sColor){
+    app_logic_led_queue_item_t sItem = {
+        .eType = E_APP_LOGIC_LED_CMD_SET_PIXEL,
+        .sColor = sColor,
+        .u8LedIndex = u8LedIndex
+    }; 
+    return app_logic_led_SendItem(&sItem); 
 }

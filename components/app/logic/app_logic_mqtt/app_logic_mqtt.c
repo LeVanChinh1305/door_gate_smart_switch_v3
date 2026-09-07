@@ -16,6 +16,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include "app_logic_relay.h"
+#include "app_led_state.h"
+#include "app_logic_mqtt_publisher.h" 
+#include "app_logic_extra_config.h"
 
 static const char *TAG = "APP_LOGIC_MQTT";
 
@@ -100,25 +103,58 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
                 ESP_LOGI(TAG, "Điều khiển thiết bị - Param: %s, Value: %d", pcParam, iValue);
 
                 /* Ánh xạ tham số từ app/cloud xuống lệnh điều khiển relay thực tế */
-                if (strcmp(pcParam, "gate_1") == 0 || strcmp(pcParam, "up") == 0) {
+                if (strcmp(pcParam, "gate_3") == 0 || strcmp(pcParam, "up") == 0) {
                     if (iValue == 1) {
                         (void)app_logic_relay_Open();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Mở cửa (UP)");
+                        /* Tắt toàn bộ và chỉ bật LED số 0 (Xanh lá) */
+                        (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
+                        ESP_LOGI(TAG, "-> Đã set màu led"); 
                     }
                 } 
-                else if (strcmp(pcParam, "gate_2") == 0 || strcmp(pcParam, "down") == 0) {
+                else if (strcmp(pcParam, "gate_1") == 0 || strcmp(pcParam, "down") == 0) {
                     if (iValue == 1) {
                         (void)app_logic_relay_Close();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Đóng cửa (DOWN)");
+                        /* Tắt toàn bộ và chỉ bật LED số 1 xanh */
+                        (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
+                        ESP_LOGI(TAG, "-> Đã set màu led"); 
                     }
                 } 
-                else if (strcmp(pcParam, "gate_3") == 0 || strcmp(pcParam, "stop") == 0) {
+                else if (strcmp(pcParam, "gate_2") == 0 || strcmp(pcParam, "stop") == 0) {
                     if (iValue == 1) {
                         (void)app_logic_relay_Stop();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Dừng cửa (STOP)");
+                        /* Tắt toàn bộ và chỉ bật LED số 2 xanh*/
+                        (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
+                        ESP_LOGI(TAG, "-> Đã set màu led"); 
                     }
-                } 
-                else {
+                }else if (strcmp(pcParam, "gate_level") == 0) {
+                    /* Kiểm tra giới hạn an toàn của giá trị % (0 đến 100) */
+                    if (iValue >= 0 && iValue <= 100) {
+                        ESP_LOGI(TAG, "-> Thực thi lệnh: Điều khiển cửa đến mức %d%%", iValue);
+                        
+                        uint8_t u8TargetVal = (uint8_t)iValue;
+                        uint8_t u8CurrentVal = app_logic_relay_GetCurrentLevel();
+                        
+                        ESP_LOGI(TAG, "-> Thực thi lệnh: Điều khiển cửa đến mức %u%% (Hiện tại: %u%%)", u8TargetVal, u8CurrentVal);
+                        
+                        if (u8TargetVal > u8CurrentVal) {
+                            (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
+                        } 
+                        else if (u8TargetVal < u8CurrentVal) {
+                            (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
+                        } 
+                        else {
+                            (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
+                        }
+
+                        app_logic_relay_SetLevel(u8TargetVal);
+ 
+                    } else {
+                        ESP_LOGW(TAG, "Giá trị gate_level không hợp lệ (ngoài dải 0-100): %d", iValue);
+                    }
+                }else {
                     ESP_LOGW(TAG, "Param điều khiển không được hỗ trợ: %s", pcParam);
                 }
             } else {
@@ -161,8 +197,24 @@ static void app_logic_mqtt_Task(void *pArg)
                         } 
                         else if (strcmp(pcCmdName, "CmdGetExtraConfig") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetExtraConfig");
-                        }
-                        else if(strcmp(pcCmdName, "CmdGetDeviceInfo") ==0){
+                            /* 
+                             * CẤP PHÁT TĨNH: Sử dụng từ khóa static để mảng lưu cố định trong vùng nhớ .bss/data, 
+                             * không làm tràn bộ nhớ Stack của Task và tuyệt đối không dùng Heap (malloc).
+                             */
+                            static char acResponseJson[1536];
+                            memset(acResponseJson, 0, sizeof(acResponseJson));
+                            
+                            /* Gọi module phụ trợ ghi dữ liệu trực tiếp vào mảng tĩnh */
+                            app_logic_extra_config_ProcessGet(acResponseJson, sizeof(acResponseJson));
+                            
+                            if (acResponseJson[0] != '\0') {
+                                /* TODO: Gọi hàm Publish MQTT thực tế của bạn tại đây */
+                                (void)app_logic_mqtt_publisher_SendResponse(acResponseJson);
+                            }
+                        }else if (strcmp(pcCmdName, "CmdSetExtraConfig") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdSetExtraConfig, cập nhật thông số...");
+                            app_logic_extra_config_ProcessSet(jsValue ? jsValue : jsRoot); 
+                        }else if(strcmp(pcCmdName, "CmdGetDeviceInfo") ==0){
                             ESP_LOGI(TAG, "-> khớp lệnh CmdGetDeviceInfo");
                         }
                         else if(strcmp(pcCmdName, "CmdGetSensorConfig") ==0){

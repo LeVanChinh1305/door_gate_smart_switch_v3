@@ -125,6 +125,27 @@ esp_err_t app_common_StatusToEspErr(e_app_status_t eStatus);
         }                           \
     } while(0) // sau này chỉ cần gọi DF_RETURN_IF_ERROR(func(...)) thay vì viết 3 dòng kiểm tra lỗi như trên, giúp code gọn hơn và dễ đọc hơn
 
+
+
+/* Các Macro hỗ trợ lấy dữ liệu từ JSON siêu gọn */
+#define UPDATE_CFG_INT(json, key, dest) \
+    do { \
+        const cJSON *item = cJSON_GetObjectItem(json, key); \
+        if (cJSON_IsNumber(item) && (dest) != item->valueint) { \
+            (dest) = item->valueint; \
+            bConfigChanged = true; \
+        } \
+    } while(0)
+
+#define UPDATE_CFG_UINT32(json, key, dest) \
+    do { \
+        const cJSON *item = cJSON_GetObjectItem(json, key); \
+        if (cJSON_IsNumber(item) && (dest) != (uint32_t)item->valuedouble) { \
+            (dest) = (uint32_t)item->valuedouble; \
+            bConfigChanged = true; \
+        } \
+    } while(0)
+
 #ifdef __cplusplus
 }
 #endif 

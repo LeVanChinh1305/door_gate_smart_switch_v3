@@ -8,6 +8,7 @@
 #include <string.h>
 
 static const char *TAG = "APP_NVS";
+app_extra_config_t g_sExtraConfig;
 
 #define DF_APP_STORAGE_KEY_DEV_TYPE "dev_type"
 #define DF_APP_STORAGE_KEY_DEV_EXT_ADDR "dev_ext_addr"
@@ -262,3 +263,110 @@ bool app_nvs_IsProvisionedDeviceConfig(void) {
   return bIsProvisioned;
 }
 
+
+
+
+// extra config functions
+
+
+static void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config) {
+  config->buzzerEnb = 1;
+  config->ledEnb = 1;
+  config->ledRgbOn = 2507;
+  config->ledRgbOff = 9630;
+  config->led_lightness = 100;
+  
+  config->gate_1_type = 1;
+  config->gate_1_control_mode = 1;
+  config->gate_1_led_off = 0;
+  config->gate_1_rgb_on = 862021;
+  config->gate_1_rgb_off = 123456;
+  
+  config->gate_2_type = 1;
+  config->gate_2_control_mode = 1;
+  config->gate_2_led_off = 0;
+  config->gate_2_rgb_on = 862021;
+  config->gate_2_rgb_off = 123456;
+
+  config->gate_3_type = 1;
+  config->gate_3_control_mode = 1;
+  config->gate_3_led_off = 0;
+  config->gate_3_rgb_on = 862021;
+  config->gate_3_rgb_off = 123456;
+
+  config->nightModeEnb = 1;
+  config->nightBegin = 1638928504;
+  config->nightEnd = 1638928504;
+  config->nightTz = 7;
+  
+  config->warningEnb = 1;
+  config->warningBegin = 1638928504;
+  config->warningEnd = 1638928504;
+
+  config->switch_1_lightness = 100;
+  config->switch_2_lightness = 100;
+  config->switch_3_lightness = 100;
+
+  config->anti_animal_enb = 1;
+  config->anti_animal_lock_time = 60;
+  config->gate_countdown = 200;
+  config->sgmCycle = 60;
+  config->sgmCycleGap = 6;
+  config->sgmUseCycleGap = 1;
+  
+  config->resetMode = 1;
+  config->wlanMode = 0;
+  config->lockRFEnb = 1;
+  config->lockRFBegin = 1638928504;
+  config->lockRFEnd = 1638928504;
+}
+
+esp_err_t app_nvs_SaveExtraConfig(const app_extra_config_t *config) {
+  DF_CHECK_NULL_PARAM(config);
+
+  nvs_handle_t hHandle = 0U;
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
+  if (eErr != ESP_OK) {
+    ESP_LOGE(TAG, "Mở NVS để lưu Extra Config thất bại: %s", esp_err_to_name(eErr));
+    return eErr;
+  }
+
+  /* Lưu toàn bộ struct xuống NVS dưới dạng Blob */
+  eErr = nvs_set_blob(hHandle, DF_APP_STORAGE_KEY_EXTRA_CONFIG, config, sizeof(app_extra_config_t));
+  if (eErr == ESP_OK) {
+    eErr = nvs_commit(hHandle);
+    ESP_LOGI(TAG, "Đã lưu Extra Config vào NVS");
+  } else {
+    ESP_LOGE(TAG, "Lưu Blob Extra Config thất bại: %s", esp_err_to_name(eErr));
+  }
+  
+  nvs_close(hHandle);
+  return eErr;
+}
+
+esp_err_t app_nvs_LoadExtraConfig(app_extra_config_t *config) {
+  DF_CHECK_NULL_PARAM(config);
+  memset(config, 0, sizeof(app_extra_config_t)); // Xóa trắng dữ liệu trước khi đọc
+
+  app_nvs_SetDefaultExtraConfig(config); // đọc dữ liệu mặc định trước (tránh trường hợp mở nvs thất bại)
+
+  nvs_handle_t hHandle = 0U;
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hHandle);
+  if (eErr != ESP_OK) {
+      return eErr;
+  }
+
+  size_t required_size = sizeof(app_extra_config_t);
+  eErr = nvs_get_blob(hHandle, DF_APP_STORAGE_KEY_EXTRA_CONFIG, config, &required_size);
+  
+  if (eErr == ESP_ERR_NVS_NOT_FOUND) {
+    ESP_LOGW(TAG, "Extra Config chưa từng được lưu, tiến hành dùng giá trị mặc định");    
+  } else if (eErr != ESP_OK) {
+    ESP_LOGE(TAG, "Lỗi đọc Extra Config: %s", esp_err_to_name(eErr));
+  }else {
+    ESP_LOGI(TAG, "Đã tải thành công Extra Config từ bộ nhớ Flash");
+  }
+
+  nvs_close(hHandle);
+  return eErr;
+}
