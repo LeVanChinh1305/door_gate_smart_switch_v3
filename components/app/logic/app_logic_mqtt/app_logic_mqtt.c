@@ -191,6 +191,7 @@ static void app_logic_mqtt_Task(void *pArg)
                         
                         if (strcmp(pcCmdName, "CmdGetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetData: tiến hành đọc thông tin thiết bị và phản hồi");
+                            app_logic_relay_UpdateAppUI();
                         } 
                         else if (strcmp(pcCmdName, "CmdGetWifiInfo") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetWifiInfo");

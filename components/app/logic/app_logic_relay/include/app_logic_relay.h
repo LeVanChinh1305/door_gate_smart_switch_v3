@@ -88,6 +88,10 @@ uint8_t app_logic_relay_GetCurrentLevel(void);
 
 esp_err_t app_logic_relay_SetLevel(uint8_t u8Level);
 
+
+void app_logic_relay_UpdateAppUI(void);
+
+
 #ifdef __cplusplus
 }
 #endif

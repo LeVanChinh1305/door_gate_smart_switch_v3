@@ -41,7 +41,7 @@ uint8_t app_logic_relay_GetCurrentLevel(void) {
 /**
  * @brief Tính toán logic hiển thị nút bấm trên App và gửi báo cáo MQTT
  */
-static void app_logic_relay_UpdateAppUI(void) {
+void app_logic_relay_UpdateAppUI(void) {
     uint8_t u8Gate1 = 0U; // Trạng thái báo cáo nút Mở (UP)
     uint8_t u8Gate2 = 0U; // Trạng thái báo cáo nút Đóng (DOWN)
     uint8_t u8Gate3 = 0U; // Trạng thái báo cáo nút Dừng (STOP)
