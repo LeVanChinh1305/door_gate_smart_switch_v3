@@ -14,5 +14,5 @@ idf_component_register(
         freertos 
         log 
         app_led_state
-        
+        app_relay_state
 )

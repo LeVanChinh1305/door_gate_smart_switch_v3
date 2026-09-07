@@ -261,3 +261,4 @@ bool app_nvs_IsProvisionedDeviceConfig(void) {
   }
   return bIsProvisioned;
 }
+

@@ -32,6 +32,11 @@ extern "C" {
 //=========================================================================================================
 //============Hằng số dùng chung nhiều module==============
 //=========================================================================================================
+// số lượng phần tử queue 
+#define DF_QUEUE_LENGTH_SMALL   (5U)
+#define DF_QUEUE_LENGTH_MEDIUM  (10U)
+#define DF_QUEUE_LENGTH_LARGE   (20U)
+
 // Thời gian timeout Watchdog Task — dùng trong app_main.c khi init WDT và trong mọi task chạy dài (touch/relay/led) để biết chu kỳ phải "cho ăn". 
 #define DF_WDT_TIMEOUT_MS        (10000UL)
 // Mức ưu tiên Task (Task Priorities): Việc quy hoạch tập trung mức ưu tiên cho các luồng xử lý giúp kiểm soát luồng thực thi và ngăn chặn hiện tượng tranh chấp tài nguyên (Priority Inversion)

@@ -9,6 +9,7 @@
 #include "app_blufi.h"
 #include "app_device_state.h"
 #include "app_led_state.h"
+#include "app_relay_state.h"
 #include "app_logic_buzzer.h"
 #include "app_logic_led.h"
 #include "app_logic_mqtt.h"
@@ -43,6 +44,8 @@ void app_main(void) {
              esp_err_to_name(eRet));
     return;
   }
+  app_relay_state_Init();
+  app_relay_state_SetState(E_RELAY_STATE_STOPPED);
 
   eRet = app_logic_touch_Init();
   if (eRet != ESP_OK) {

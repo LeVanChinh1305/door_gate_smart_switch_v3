@@ -59,6 +59,7 @@ typedef struct {
   char api_url[DF_APP_STORAGE_API_URL_SIZE];
   char api_secret_key[DF_APP_STORAGE_API_SECRET_SIZE];
   char user_id[DF_APP_STORAGE_USER_ID_SIZE];
+  uint32_t travel_time_ms;
 } app_nvs_device_config_t;
 
 // Lưu device config vào NVS

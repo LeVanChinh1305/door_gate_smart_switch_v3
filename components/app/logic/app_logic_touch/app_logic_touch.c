@@ -10,12 +10,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "app_common.h"
 
 static const char *TAG = "APP_LOGIC_TOUCH";
-
-#define DF_APP_LOGIC_TOUCH_QUEUE_LENGTH  (8U)
-#define DF_APP_LOGIC_TOUCH_TASK_STACK    (3072U)
-#define DF_APP_LOGIC_TOUCH_TASK_PRIORITY (5U)
 
 static QueueHandle_t g_hTouchCommandQueue = NULL;
 static TaskHandle_t g_hTouchTask = NULL;
@@ -75,15 +72,12 @@ esp_err_t app_logic_touch_Init(void)
         return eErr;
     }
 
-    g_hTouchCommandQueue = xQueueCreate(DF_APP_LOGIC_TOUCH_QUEUE_LENGTH,
-                                         sizeof(e_app_logic_touch_cmd_t));
+    g_hTouchCommandQueue = xQueueCreate(DF_QUEUE_LENGTH_MEDIUM, sizeof(e_app_logic_touch_cmd_t));
     if (g_hTouchCommandQueue == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
-    if (xTaskCreate(app_logic_touch_Task, "touch_logic",
-                    DF_APP_LOGIC_TOUCH_TASK_STACK, NULL,
-                    DF_APP_LOGIC_TOUCH_TASK_PRIORITY, &g_hTouchTask) != pdPASS) {
+    if (xTaskCreate(app_logic_touch_Task, "touch_logic",DF_TASK_STACK_MEDIUM, NULL,DF_TASK_PRIO_HIGH, &g_hTouchTask) != pdPASS) {
         vQueueDelete(g_hTouchCommandQueue);
         g_hTouchCommandQueue = NULL;
         return ESP_ERR_NO_MEM;
@@ -106,6 +100,5 @@ esp_err_t app_logic_touch_SendCommand(e_app_logic_touch_cmd_t eCommand)
     if (eCommand > E_APP_LOGIC_TOUCH_CMD_SOFT_RESET) {
         return ESP_ERR_INVALID_ARG;
     }
-    return xQueueSend(g_hTouchCommandQueue, &eCommand, 0U) == pdPASS
-               ? ESP_OK : ESP_ERR_TIMEOUT;
+    return xQueueSend(g_hTouchCommandQueue, &eCommand, 0U) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT;
 }

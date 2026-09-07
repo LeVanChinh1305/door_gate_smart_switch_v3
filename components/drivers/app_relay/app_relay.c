@@ -27,11 +27,9 @@ static esp_err_t app_relay_SetLevel(gpio_num_t gpio, uint32_t level)
     return ret;
 }
 
-
 /**
- * @brief   Tắt toàn bộ các rơ-le.
- * @param   None
- * @return  esp_err_t: ESP_OK nếu thành công, hoặc ESP_FAIL nếu có lỗi xảy ra khi tắt một trong các rơ-le.
+ * @brief   Tắt toàn bộ các rơ-le ngay lập tức không delay.
+ * @return  esp_err_t: ESP_OK nếu thành công.
  */
 static esp_err_t app_relay_AllOffUnlocked(void)
 {
@@ -85,6 +83,15 @@ esp_err_t app_relay_Init(void)
     return ESP_OK;
 }
 
+esp_err_t app_relay_EmergencyStop(void)
+{
+    if (!g_bIsReady) {
+        ESP_LOGW(TAG, "Driver relay chưa được khởi tạo");
+        return ESP_ERR_INVALID_STATE;
+    }
+    return app_relay_AllOffUnlocked();
+}
+
 esp_err_t app_relay_ExecuteCmd(e_app_relay_cmd_t cmd)
 {
     if (!g_bIsReady) {
@@ -102,13 +109,13 @@ esp_err_t app_relay_ExecuteCmd(e_app_relay_cmd_t cmd)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // BƯỚC 2: Tắt toàn bộ để tránh chập pha
+    // BƯỚC 2: Tắt toàn bộ để tránh chập pha trước khi kích chân mới
     esp_err_t ret = app_relay_AllOffUnlocked();
     if (ret != ESP_OK) {
         return ret;
     }
 
-    // BƯỚC 3: Tạo trễ an toàn cơ học (Khóa liên động)
+    // BƯỚC 3: Tạo trễ an toàn cơ học (Khóa liên động chống sốc ngược động cơ)
     vTaskDelay(pdMS_TO_TICKS(DF_RELAY_INTERLOCK_DELAY_MS));
 
     // BƯỚC 4: Kích hoạt rơ-le tương ứng
@@ -126,4 +133,29 @@ esp_err_t app_relay_ExecuteCmd(e_app_relay_cmd_t cmd)
             ESP_LOGW(TAG, "Lệnh relay không xác định: %d", cmd);
             return ESP_ERR_INVALID_ARG;
     }
+}
+
+esp_err_t app_relay_TriggerPulse(e_app_relay_cmd_t cmd, uint32_t u32PulseDurationMs)
+{
+    if (!g_bIsReady) {
+        ESP_LOGW(TAG, "Driver relay chưa được khởi tạo");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (cmd < E_RELAY_CMD_CLOSE || cmd > E_RELAY_CMD_STOP) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (u32PulseDurationMs == 0) {
+        u32PulseDurationMs = DF_RELAY_DEFAULT_PULSE_DURATION_MS;
+    }
+
+    esp_err_t ret = app_relay_ExecuteCmd(cmd);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(u32PulseDurationMs));
+
+    return app_relay_AllOffUnlocked();
 }

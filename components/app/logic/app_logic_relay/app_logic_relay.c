@@ -1,10 +1,11 @@
 /**
  * @file app_logic_relay.c
- * @brief Điều phối lệnh relay từ Application Layer bằng queue và task riêng.
+ * @brief Điều phối lệnh relay từ Application Layer bằng queue và task riêng, kết hợp khóa chéo an toàn.
  */
 
 #include "app_logic_relay.h"
-
+#include "app_relay_state.h"
+#include "app_common.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -12,27 +13,76 @@
 
 static const char *TAG = "APP_LOGIC_RELAY";
 
-#define DF_APP_LOGIC_RELAY_QUEUE_LENGTH (8U)
-#define DF_APP_LOGIC_RELAY_TASK_STACK   (3072U)
-#define DF_APP_LOGIC_RELAY_TASK_PRIORITY (5U)
-
 static QueueHandle_t g_hRelayCommandQueue = NULL;
 static TaskHandle_t g_hRelayTask = NULL;
 static bool g_bIsReady = false;
 
 /**
- * @brief Task nhận và thực thi tuần tự các lệnh relay.
- * @param pArg Tham số task, hiện không sử dụng.
- * @return Không trả về; task chạy vô hạn.
+ * @brief Task nhận và thực thi tuần tự các lệnh relay với logic bảo vệ an toàn.
+ * @param pArg Tham số task (không sử dụng).
  */
 static void app_logic_relay_Task(void *pArg)
 {
-    e_app_relay_cmd_t eCommand;
+    app_logic_relay_msg_t sMsg;
     (void)pArg;
 
     while (true) {
-        if (xQueueReceive(g_hRelayCommandQueue, &eCommand, portMAX_DELAY) == pdPASS) {
-            esp_err_t eErr = app_relay_ExecuteCmd(eCommand);
+        if (xQueueReceive(g_hRelayCommandQueue, &sMsg, portMAX_DELAY) == pdPASS) {
+            e_relay_state_t eCurrentState = app_relay_state_GetState();
+
+            // Kiểm tra an toàn: Nếu đang bị khóa mà không phải cờ cưỡng chế (ForceOverride) thì bỏ qua
+            if ((eCurrentState == E_RELAY_STATE_SAFETY_LOCKED) && (!sMsg.bForceOverride)) {
+                ESP_LOGW(TAG, "Thiết bị đang bị khóa an toàn (SAFETY_LOCKED), từ chối thực thi lệnh: %d", sMsg.eCmd);
+                continue;
+            }
+
+            esp_err_t eErr = ESP_OK;
+            uint32_t u32PulseTime = (sMsg.u32PulseDurationMs > 0) ? sMsg.u32PulseDurationMs : DF_RELAY_DEFAULT_PULSE_DURATION_MS;
+
+            switch (sMsg.eCmd) {
+                case E_APP_LOGIC_RELAY_CMD_OPEN:
+                    // Khóa chéo an toàn: Nếu đang đóng, phải dừng trước khi kích mở để tránh sốc dòng cơ khí
+                    if (eCurrentState == E_RELAY_STATE_CLOSING) {
+                        ESP_LOGI(TAG, "Đang đóng -> Tự động kích STOP trước khi đảo chiều mở...");
+                        (void)app_relay_TriggerPulse(E_RELAY_CMD_STOP, u32PulseTime);
+                        vTaskDelay(pdMS_TO_TICKS(DF_INTERLOCK_DELAY_MS));
+                    }
+                    (void)app_relay_state_SetState(E_RELAY_STATE_OPENING);
+                    eErr = app_relay_TriggerPulse(E_RELAY_CMD_OPEN, u32PulseTime);
+                    break;
+
+                case E_APP_LOGIC_RELAY_CMD_CLOSE:
+                    // Khóa chéo an toàn: Nếu đang mở, phải dừng trước khi kích đóng
+                    if (eCurrentState == E_RELAY_STATE_OPENING) {
+                        ESP_LOGI(TAG, "Đang mở -> Tự động kích STOP trước khi đảo chiều đóng...");
+                        (void)app_relay_TriggerPulse(E_RELAY_CMD_STOP, u32PulseTime);
+                        vTaskDelay(pdMS_TO_TICKS(DF_INTERLOCK_DELAY_MS));
+                    }
+                    (void)app_relay_state_SetState(E_RELAY_STATE_CLOSING);
+                    eErr = app_relay_TriggerPulse(E_RELAY_CMD_CLOSE, u32PulseTime);
+                    break;
+
+                case E_APP_LOGIC_RELAY_CMD_STOP:
+                    eErr = app_relay_TriggerPulse(E_RELAY_CMD_STOP, u32PulseTime);
+                    (void)app_relay_state_SetState(E_RELAY_STATE_STOPPED);
+                    break;
+
+                case E_APP_LOGIC_RELAY_CMD_EMERGENCY_STOP:
+                    eErr = app_relay_EmergencyStop();
+                    (void)app_relay_state_SetState(E_RELAY_STATE_STOPPED);
+                    break;
+
+                case E_APP_LOGIC_RELAY_CMD_ALL_OFF:
+                    eErr = app_relay_ExecuteCmd(E_RELAY_CMD_ALL_OFF);
+                    (void)app_relay_state_SetState(E_RELAY_STATE_STOPPED);
+                    break;
+
+                default:
+                    ESP_LOGW(TAG, "Mã lệnh relay không hợp lệ: %d", sMsg.eCmd);
+                    eErr = ESP_ERR_INVALID_ARG;
+                    break;
+            }
+
             if (eErr != ESP_OK) {
                 ESP_LOGE(TAG, "Thực thi lệnh relay thất bại: %s", esp_err_to_name(eErr));
             }
@@ -40,11 +90,6 @@ static void app_logic_relay_Task(void *pArg)
     }
 }
 
-/**
- * @brief Khởi tạo driver relay, queue và task điều khiển.
- * @param None.
- * @return ESP_OK nếu thành công; ESP_ERR_NO_MEM hoặc mã lỗi driver khi thất bại.
- */
 esp_err_t app_logic_relay_Init(void)
 {
     if (g_bIsReady) {
@@ -56,7 +101,7 @@ esp_err_t app_logic_relay_Init(void)
         return eErr;
     }
 
-    g_hRelayCommandQueue = xQueueCreate(DF_APP_LOGIC_RELAY_QUEUE_LENGTH, sizeof(e_app_relay_cmd_t));
+    g_hRelayCommandQueue = xQueueCreate(DF_QUEUE_LENGTH_MEDIUM, sizeof(app_logic_relay_msg_t));
     if (g_hRelayCommandQueue == NULL) {
         ESP_LOGE(TAG, "Tạo hàng đợi lệnh relay thất bại");
         return ESP_ERR_NO_MEM;
@@ -64,9 +109,9 @@ esp_err_t app_logic_relay_Init(void)
 
     BaseType_t xTaskResult = xTaskCreate(app_logic_relay_Task,
                                          "relay_logic",
-                                         DF_APP_LOGIC_RELAY_TASK_STACK,
+                                         DF_TASK_STACK_MEDIUM,
                                          NULL,
-                                         DF_APP_LOGIC_RELAY_TASK_PRIORITY,
+                                         DF_TASK_PRIO_CRITICAL,
                                          &g_hRelayTask);
     if (xTaskResult != pdPASS) {
         ESP_LOGE(TAG, "Tạo task xử lý relay thất bại");
@@ -76,24 +121,86 @@ esp_err_t app_logic_relay_Init(void)
     }
 
     g_bIsReady = true;
+    ESP_LOGI(TAG, "Khởi tạo module app_logic_relay thành công");
     return ESP_OK;
 }
 
-/**
- * @brief Đưa lệnh relay vào queue để task xử lý bất đồng bộ.
- * @param eCommand Lệnh relay cần gửi.
- * @return ESP_OK nếu gửi thành công; mã lỗi nếu chưa khởi tạo, lệnh sai hoặc queue đầy.
- */
-esp_err_t app_logic_relay_SendCommand(e_app_relay_cmd_t eCommand)
+esp_err_t app_logic_relay_SendMsg(const app_logic_relay_msg_t *pMsg)
 {
     if ((!g_bIsReady) || (g_hRelayCommandQueue == NULL) || (g_hRelayTask == NULL)) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    if ((eCommand < E_RELAY_CMD_CLOSE) || (eCommand > E_RELAY_CMD_ALL_OFF)) {
+    if (pMsg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    return xQueueSend(g_hRelayCommandQueue, &eCommand, 0U) == pdPASS
-               ? ESP_OK : ESP_ERR_TIMEOUT;
+    return (xQueueSend(g_hRelayCommandQueue, pMsg, 0U) == pdPASS) ? ESP_OK : ESP_ERR_TIMEOUT;
+}
+
+esp_err_t app_logic_relay_Open(void)
+{
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_OPEN,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+    return app_logic_relay_SendMsg(&sMsg);
+}
+
+esp_err_t app_logic_relay_Close(void)
+{
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_CLOSE,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+    return app_logic_relay_SendMsg(&sMsg);
+}
+
+esp_err_t app_logic_relay_Stop(void)
+{
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_STOP,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+    return app_logic_relay_SendMsg(&sMsg);
+}
+
+esp_err_t app_logic_relay_EmergencyStop(void)
+{
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_EMERGENCY_STOP,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = true
+    };
+    return app_logic_relay_SendMsg(&sMsg);
+}
+
+esp_err_t app_logic_relay_SendCommand(e_app_relay_cmd_t eCommand)
+{
+    app_logic_relay_msg_t sMsg = {
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+
+    switch (eCommand) {
+        case E_RELAY_CMD_OPEN:
+            sMsg.eCmd = E_APP_LOGIC_RELAY_CMD_OPEN;
+            break;
+        case E_RELAY_CMD_CLOSE:
+            sMsg.eCmd = E_APP_LOGIC_RELAY_CMD_CLOSE;
+            break;
+        case E_RELAY_CMD_STOP:
+            sMsg.eCmd = E_APP_LOGIC_RELAY_CMD_STOP;
+            break;
+        case E_RELAY_CMD_ALL_OFF:
+            sMsg.eCmd = E_APP_LOGIC_RELAY_CMD_ALL_OFF;
+            break;
+        default:
+            return ESP_ERR_INVALID_ARG;
+    }
+
+    return app_logic_relay_SendMsg(&sMsg);
 }

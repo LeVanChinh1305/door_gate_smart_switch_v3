@@ -15,6 +15,7 @@
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
+#include "app_logic_relay.h"
 
 static const char *TAG = "APP_LOGIC_MQTT";
 
@@ -86,10 +87,44 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
     if (eErr == ESP_OK && zPlaintextLen > 0U) {
         ESP_LOGI(TAG, "Giải mã payload thành công, nội dung: %s", acPlaintextBuffer);
 
-        /* 4. Phân tích nội dung JSON bên trong chuỗi plaintext sau giải mã */
+        /* 4. Phân tích nội dung JSON bên trong chuỗi plaintext sau giải mã (Chỉ parse 1 lần duy nhất) */
         cJSON *jsInnerJson = cJSON_Parse(acPlaintextBuffer);
         if (jsInnerJson != NULL) {
-            /* TODO: Triển khai các kịch bản điều khiển thiết bị thực tế (Relay, LED, v.v.) tại đây */
+            const cJSON *jsParam = cJSON_GetObjectItem(jsInnerJson, "param");
+            const cJSON *jsValue = cJSON_GetObjectItem(jsInnerJson, "value");
+
+            if (cJSON_IsString(jsParam) && jsParam->valuestring != NULL) {
+                const char *pcParam = jsParam->valuestring;
+                int iValue = cJSON_IsNumber(jsValue) ? jsValue->valueint : 0;
+
+                ESP_LOGI(TAG, "Điều khiển thiết bị - Param: %s, Value: %d", pcParam, iValue);
+
+                /* Ánh xạ tham số từ app/cloud xuống lệnh điều khiển relay thực tế */
+                if (strcmp(pcParam, "gate_1") == 0 || strcmp(pcParam, "up") == 0) {
+                    if (iValue == 1) {
+                        (void)app_logic_relay_Open();
+                        ESP_LOGI(TAG, "-> Thực thi lệnh: Mở cửa (UP)");
+                    }
+                } 
+                else if (strcmp(pcParam, "gate_2") == 0 || strcmp(pcParam, "down") == 0) {
+                    if (iValue == 1) {
+                        (void)app_logic_relay_Close();
+                        ESP_LOGI(TAG, "-> Thực thi lệnh: Đóng cửa (DOWN)");
+                    }
+                } 
+                else if (strcmp(pcParam, "gate_3") == 0 || strcmp(pcParam, "stop") == 0) {
+                    if (iValue == 1) {
+                        (void)app_logic_relay_Stop();
+                        ESP_LOGI(TAG, "-> Thực thi lệnh: Dừng cửa (STOP)");
+                    }
+                } 
+                else {
+                    ESP_LOGW(TAG, "Param điều khiển không được hỗ trợ: %s", pcParam);
+                }
+            } else {
+                ESP_LOGW(TAG, "Cấu trúc param hoặc value bên trong plaintext không hợp lệ");
+            }
+
             cJSON_Delete(jsInnerJson);
         }
     } else {
@@ -120,7 +155,6 @@ static void app_logic_mqtt_Task(void *pArg)
                         
                         if (strcmp(pcCmdName, "CmdGetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetData: tiến hành đọc thông tin thiết bị và phản hồi");
-                            
                         } 
                         else if (strcmp(pcCmdName, "CmdGetWifiInfo") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdGetWifiInfo");

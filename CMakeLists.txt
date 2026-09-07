@@ -22,6 +22,7 @@ set(EXTRA_COMPONENT_DIRS
 	${CMAKE_CURRENT_LIST_DIR}/components/common
 	${CMAKE_CURRENT_LIST_DIR}/components/app/device/app_device_state
 	${CMAKE_CURRENT_LIST_DIR}/components/app/device/app_led_state
+	${CMAKE_CURRENT_LIST_DIR}/components/app/device/app_relay_state
 )
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
