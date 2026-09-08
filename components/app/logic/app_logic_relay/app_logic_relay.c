@@ -42,41 +42,33 @@ uint8_t app_logic_relay_GetCurrentLevel(void) {
  * @brief Tính toán logic hiển thị nút bấm trên App và gửi báo cáo MQTT
  */
 void app_logic_relay_UpdateAppUI(void) {
-    uint8_t u8Gate1 = 0U; // Trạng thái báo cáo nút Mở (UP)
-    uint8_t u8Gate2 = 0U; // Trạng thái báo cáo nút Đóng (DOWN)
-    uint8_t u8Gate3 = 0U; // Trạng thái báo cáo nút Dừng (STOP)
+    uint8_t u8Gate1 = 0U; // Trạng thái báo cáo nút đóng 
+    uint8_t u8Gate2 = 0U; // Trạng thái báo cáo nút STOP ()
+    uint8_t u8Gate3 = 0U; // Trạng thái báo cáo nút mở 
 
     if (g_u8CurrentLevel == g_u8TargetLevel || g_i8Direction == 0) {
         /* 1. TRẠNG THÁI DỪNG (Thực tế đã bằng mong muốn) */
-        if (g_u8CurrentLevel == 0U) {
-            /* Đang đóng hết: Chỉ sáng chân thuận mở */
-            u8Gate1 = 1U;
-        } 
-        else if (g_u8CurrentLevel == 100U) {
-            /* Đang mở hết: Chỉ sáng chân thuận đóng */
-            u8Gate2 = 1U;
-        } 
-        else {
-            /* Đang lấp lửng: Sáng cả 2 chân Mở và Đóng */
-            u8Gate1 = 1U;
-            u8Gate2 = 1U;
-        }
-        /* Đã dừng thì luôn tắt chân Stop */
+       
         u8Gate3 = 0U;
+        u8Gate1 = 0U;
+        u8Gate2 = 0U;
     } 
     else {
-        /* 2. TRẠNG THÁI ĐANG DI CHUYỂN (Thực tế khác mong muốn) */
-        u8Gate3 = 1U; /* Đang chạy thì luôn phải sáng chân Stop */
-        
+        /* 2. TRẠNG THÁI ĐANG DI CHUYỂN (Thực tế khác mong muốn) */        
         if (g_i8Direction == 1) { 
             /* Đang chạy lên (Mở): Tắt chân thuận (Mở), Sáng chân đối ngược (Đóng) */
             u8Gate1 = 0U; 
-            u8Gate2 = 1U; 
+            u8Gate2 = 0U; 
+            u8Gate3 = 1U; 
         }   
         else if (g_i8Direction == -1) {
             /* Đang chạy xuống (Đóng): Tắt chân thuận (Đóng), Sáng chân đối ngược (Mở) */
             u8Gate1 = 1U; 
             u8Gate2 = 0U; 
+            u8Gate3 = 0U; 
+
+        }else{
+            
         }
     }
 
