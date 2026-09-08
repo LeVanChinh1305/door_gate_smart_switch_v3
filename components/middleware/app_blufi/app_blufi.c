@@ -24,6 +24,7 @@
 #include "app_mqtt.h"
 #include "app_nvs.h"
 #include "app_wifi.h"
+#include "app_sntp.h"
 
 // Biến lưu SSID/pass tạm
 static char g_cStaSsid[DF_BLUFI_STA_SSID_SIZE] = {0};
@@ -66,6 +67,13 @@ static esp_ble_adv_data_t blufi_adv_data = {
     .flag = (ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT),
 };
 
+static void blufi_delayed_deinit_task(void *pvParameters) {
+    vTaskDelay(pdMS_TO_TICKS(1000)); /* Chờ 1 giây cho BLE truyền xong response */
+    ESP_LOGI(TAG, "Timer hết hạn -> Kích hoạt Deinit BluFi tự động");
+    (void)app_blufi_Deinit();
+    vTaskDelete(NULL);
+}
+
 static void blufi_event_callback(esp_blufi_cb_event_t event,
                                  esp_blufi_cb_param_t *param);
 
@@ -83,8 +91,7 @@ void app_blufi_gap_event_handler(esp_gap_ble_cb_event_t event,
                                  esp_ble_gap_cb_param_t *param) {
   switch (event) {
   case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-    ESP_LOGI(TAG,
-             "Cấu hình dữ liệu quảng bá thành công -> Bắt đầu phát quảng bá!");
+    ESP_LOGI(TAG, "Cấu hình dữ liệu quảng bá thành công -> Bắt đầu phát quảng bá!");
     esp_ble_gap_start_advertising(&blufi_adv_params);
     break;
 
@@ -108,9 +115,7 @@ void esp_blufi_gatt_event_handler(esp_gatts_cb_event_t event,
     if (param->reg.status == ESP_GATT_OK) {
       esp_blufi_profile_init();
     } else {
-      ESP_LOGE(TAG,
-               "Đăng ký ứng dụng GATT thất bại, mã app_id %04x, trạng thái %d",
-               param->reg.app_id, param->reg.status);
+      ESP_LOGE(TAG, "Đăng ký ứng dụng GATT thất bại, mã app_id %04x, trạng thái %d", param->reg.app_id, param->reg.status);
     }
     break;
   default:
@@ -127,8 +132,7 @@ static void set_string_field(char *dest, size_t dest_size, const cJSON *item) {
   }
 }
 
-static void set_number_as_string_field(char *dest, size_t dest_size,
-                                       const cJSON *item) {
+static void set_number_as_string_field(char *dest, size_t dest_size, const cJSON *item) {
   if ((dest == NULL) || (dest_size == 0U) || (item == NULL)) {
     return;
   }
@@ -140,9 +144,7 @@ static void set_number_as_string_field(char *dest, size_t dest_size,
   }
 }
 
-static void send_response_set_device_config(int32_t dev_t,
-                                            const char *dev_ext_addr,
-                                            int32_t error_code) {
+static void send_response_set_device_config(int32_t dev_t, const char *dev_ext_addr, int32_t error_code) {
   if (dev_ext_addr == NULL) {
     ESP_LOGE(TAG, "Địa chỉ MAC không hợp lệ");
     return;
@@ -154,11 +156,8 @@ static void send_response_set_device_config(int32_t dev_t,
     (void)cJSON_AddNumberToObject(resp_root, "devT", (double)dev_t);
     (void)cJSON_AddStringToObject(resp_root, "devExtAddr", dev_ext_addr);
     (void)cJSON_AddNumberToObject(resp_root, "errorCode", (double)error_code);
-    (void)cJSON_AddStringToObject(
-        resp_root, "software_version",
-        "1.1.1"); // Trường đặc thụ của SetDeviceConfig
-    (void)cJSON_AddNumberToObject(resp_root, "timeStamp",
-                                  (double)((uint32_t)time(NULL)));
+    (void)cJSON_AddStringToObject( resp_root, "software_version","1.1.1"); // Trường đặc thụ của SetDeviceConfig
+    (void)cJSON_AddNumberToObject(resp_root, "timeStamp", (double)((uint32_t)time(NULL)));
 
     char *json_out = cJSON_PrintUnformatted(resp_root);
     if (json_out != NULL) {
@@ -204,8 +203,7 @@ static void send_response_get_device_id(int32_t dev_t,
     (void)cJSON_AddStringToObject(resp_root, "name", "CmdGetDeviceID");
     (void)cJSON_AddNumberToObject(resp_root, "devT", (double)dev_t);
     (void)cJSON_AddStringToObject(resp_root, "devExtAddr", dev_ext_addr);
-    (void)cJSON_AddNumberToObject(resp_root, "timeStamp",
-                                  (double)((uint32_t)time(NULL)));
+    (void)cJSON_AddNumberToObject(resp_root, "timeStamp", (double)((uint32_t)time(NULL)));
 
     char *json_out = cJSON_PrintUnformatted(resp_root);
     if (json_out != NULL) {
@@ -448,7 +446,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
 
         // XỬ LÝ LỆNH 1: CmdSetDeviceConfig
         else if (strcmp(cmd_name->valuestring, "CmdSetDeviceConfig") == 0) {
-          int32_t status_code = 50000;
+          int32_t status_code = 50000; 
 
           if (value != NULL) {
             (void)memset(&g_sCurrentDeviceConfig, 0,
@@ -529,7 +527,6 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
               g_sCurrentDeviceConfig.dev_type = DF_BLUFI_DEVICE_TYPE_DEFAULT;
               status_code = 50004;
             }
-
             if (status_code == 50000) {
               const esp_err_t eErr =
                   app_nvs_SaveDeviceConfig(&g_sCurrentDeviceConfig);
@@ -538,7 +535,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                 set_current_door_mode(DEVICE_MODE_NORMAL);
                 app_led_state_SetState(E_LED_STATE_LOCKED);
                 // Khởi tạo MQTT luôn
-                app_mqtt_StartInit(&g_sCurrentDeviceConfig);
+                //app_mqtt_StartInit(&g_sCurrentDeviceConfig);
               }
             }
           } else {
@@ -547,9 +544,19 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
 
           send_response_set_device_config(dev_t, cDeviceAddress, status_code);
           if (status_code == 50000) {
+            /* TẦNG 1 (Chuẩn): Lấy timeStamp từ đối tượng 'value' do App truyền xuống */
+            if (value != NULL) {
+              const cJSON *js_timestamp = cJSON_GetObjectItem(value, "timeStamp");
+              if (cJSON_IsNumber(js_timestamp) && (js_timestamp->valueint > 1700000000)) {
+                app_sntp_SetSystemTime((int64_t)js_timestamp->valueint);
+                ESP_LOGI(TAG, "=> TẦNG 1: Đã nạp thành công giờ từ App cho RTC: %lld", (long long)js_timestamp->valueint);
+              }
+            }
             g_bShutdownAfterDisconnect = true;
-            ESP_LOGI(TAG,
-                     "Đã lưu CmdSetDeviceConfig -> Chờ App ngắt kết nối BLE");
+            ESP_LOGI(TAG, "Đã lưu CmdSetDeviceConfig -> Chờ App ngắt kết nối BLE");
+            // vTaskDelay(pdMS_TO_TICKS(300));
+            // (void)esp_blufi_disconnect();
+            xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
           }
         }
 
@@ -688,6 +695,18 @@ esp_err_t app_blufi_Deinit(void) {
   esp_bluedroid_deinit();
   esp_bt_controller_disable();
   esp_bt_controller_deinit();
+  esp_err_t eMemRet = esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
+  if (eMemRet == ESP_OK) {
+      ESP_LOGI(TAG, "=> Đã thu hồi thành công ~50KB RAM từ Bluetooth!");
+  }
+
   ESP_LOGI(TAG, "Hủy khởi tạo BLUFI thành công");
+
+  /*  Khởi tạo MQTT tại đây */
+  if (g_sCurrentDeviceConfig.dev_type != 0) {
+      ESP_LOGI(TAG, "Đang khởi tạo MQTT sau khi tắt Bluetooth...");
+      app_mqtt_StartInit(&g_sCurrentDeviceConfig);
+  }
+
   return ESP_OK;
 }

@@ -22,7 +22,7 @@ esp_err_t app_logic_mqtt_publisher_SendResponse(const char *pcPayload)
         ESP_LOGE(TAG, "Lỗi: MQTT Client chưa được khởi tạo hoặc mất kết nối");
         return ESP_FAIL;
     }
-    if (!mqtt_app_IsConnected()) { // Hoặc kiểm tra cờ bIsMqttConnected
+    if (!app_mqtt_IsConnected()) { 
         ESP_LOGW(TAG, "MQTT đang mất kết nối, bỏ qua việc gửi bản tin");
         return ESP_FAIL;
     }

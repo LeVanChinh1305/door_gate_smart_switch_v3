@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "esp_crt_bundle.h"
 #include "app_logic_mqtt.h"
+#include "app_sntp.h"
 
 static esp_mqtt_client_handle_t g_xMqttClient = NULL;
 static bool g_bIsConnected = false;
@@ -119,6 +120,24 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
     }
     g_sDeviceConfig = *pDeviceConfig; 
 
+    /* TẦNG 2: Chờ SNTP đồng bộ ngầm tối đa 8 giây */
+    ESP_LOGI(TAG, "Đang chờ kiểm tra đồng bộ giờ SNTP Tầng 2...");
+    if (!app_sntp_WaitForSync(8000U)) {
+        time_t tNow = 0;
+        (void)time(&tNow);
+
+        /* KIỂM TRA ĐIỀU KIỆN MỀM: Nếu Tầng 1 đã gán giờ hợp lệ (> 2024), vẫn cho phép TLS hoạt động */
+        if (tNow > 1700000000LL) {
+            ESP_LOGW(TAG, "SNTP chưa xong nhưng giờ Tầng 1 hợp lệ (Timestamp: %lld). Tiếp tục TLS...", (long long)tNow);
+        } else {
+            ESP_LOGE(TAG, "Giờ hệ thống không hợp lệ (1970). Hủy kết nối TLS để tránh lỗi!");
+            return ESP_ERR_TIMEOUT; 
+        }
+    } else {
+        ESP_LOGI(TAG, "Đồng bộ thời gian SNTP Tầng 2 thành công!");
+    }
+    ESP_LOGI(TAG, "Đồng bộ thời gian thành công!");
+
     ESP_LOGI(TAG, "MQTT BROKER URI: %s", g_sDeviceConfig.broker);
     ESP_LOGI(TAG, "MQTT subscrible topic: %s", g_sDeviceConfig.mqtt_sub);
     ESP_LOGI(TAG, "MQTT publish topic: %s", g_sDeviceConfig.mqtt_pub);
@@ -129,10 +148,11 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         .broker.verification.crt_bundle_attach = esp_crt_bundle_attach,
         .credentials.username = g_sDeviceConfig.username,
         .credentials.authentication.password = g_sDeviceConfig.password,
-        .task.stack_size = DF_TASK_STACK_LARGE, 
+        .task.stack_size = DF_TASK_STACK_MAX, 
         .task.priority = DF_TASK_PRIO_NORMAL,   
         .buffer.size = 4096,
         .outbox.limit = 1024 * 4, // giới hạn bộ đệm Outbox tối đa 4KB 
+        .network.timeout_ms = 20000,
     };
 
     g_xMqttClient = esp_mqtt_client_init(&sMqttCfg); 

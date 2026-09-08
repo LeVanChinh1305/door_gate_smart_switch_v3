@@ -6,20 +6,20 @@
 #ifndef APP_LOGIC_MQTT_H
 #define APP_LOGIC_MQTT_H
 
-
 #include <stdint.h>
 #include "esp_err.h"
 
-
 #define DF_APP_LOGIC_MQTT_QUEUE_LEN    10U
 
+/* Giới hạn kích thước tối đa của 1 bản tin MQTT (VD: 1.5 KB) */
+#define DF_APP_MQTT_MAX_PAYLOAD_SIZE   2048U 
 
 /**
  * @brief Cấu trúc mục dữ liệu lưu trữ trong hàng đợi MQTT Queue
  */
 typedef struct {
-    char     *pcData;        // Con trỏ chuỗi payload JSON cấp phát động
-    uint32_t  u32DataLen;    // Độ dài dữ liệu payload
+    uint32_t  u32DataLen;                                /* Độ dài dữ liệu payload */
+    char      acData[DF_APP_MQTT_MAX_PAYLOAD_SIZE];      /* Sử dụng bộ đệm tĩnh trên Stack thay vì con trỏ malloc */
 } app_logic_mqtt_queue_item_t;
 
 /**
@@ -35,6 +35,5 @@ esp_err_t app_logic_mqtt_Init(void);
  * @return  esp_err_t ESP_OK nếu đẩy vào queue thành công.
  */
 esp_err_t app_logic_mqtt_EnqueueData(const char *pcData, uint32_t u32DataLen);
-
 
 #endif

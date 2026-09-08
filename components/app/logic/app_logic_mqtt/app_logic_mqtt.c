@@ -50,50 +50,38 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
         return;
     }
 
-    /* 1. Cấp phát tạm bộ đệm ciphertext từ mảng JSON */
-    uint8_t *pu8Ciphertext = (uint8_t *)malloc((size_t)iCipherLen);
-    if (pu8Ciphertext == NULL) {
-        ESP_LOGE(TAG, "Không đủ bộ nhớ Heap để cấp phát ciphertext");
-        return;
-    }
+    /* 1. CHUẨN HÓA: Cấp phát mảng Ciphertext trên Stack (Loại bỏ malloc/free hoàn toàn) */
+    uint8_t au8Ciphertext[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
+    (void)memset(au8Ciphertext, 0, sizeof(au8Ciphertext));
 
     for (int i = 0; i < iCipherLen; i++) {
         const cJSON *jsItem = cJSON_GetArrayItem(jsEncryptArray, i);
-        if (cJSON_IsNumber(jsItem)) {
-            pu8Ciphertext[i] = (uint8_t)jsItem->valueint;
-        } else {
-            pu8Ciphertext[i] = 0U;
-        }
+        au8Ciphertext[i] = cJSON_IsNumber(jsItem) ? (uint8_t)jsItem->valueint : 0U;
     }
 
     /* 2. Lấy cấu hình thiết bị để trích xuất khóa bí mật api_secret_key */
     const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
     if (psConfig == NULL || strlen(psConfig->api_secret_key) < 32U) {
         ESP_LOGE(TAG, "API Secret Key không hợp lệ hoặc chưa được cấu hình trong NVS");
-        free(pu8Ciphertext);
         return;
     }
 
-    /* 3. Sử dụng bộ đệm tĩnh (char array) đầu ra theo chuẩn hàm giải mã mới */
+    /* 3. Sử dụng bộ đệm tĩnh đầu ra theo chuẩn hàm giải mã */
     char acPlaintextBuffer[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
     size_t zPlaintextLen = 0U;
-
     (void)memset(acPlaintextBuffer, 0, sizeof(acPlaintextBuffer));
 
-    esp_err_t eErr = decrypt_vconnex_payload(pu8Ciphertext, 
+    esp_err_t eErr = decrypt_vconnex_payload(au8Ciphertext, 
                                             (size_t)iCipherLen,
                                             psConfig->api_secret_key,
                                             acPlaintextBuffer,
                                             sizeof(acPlaintextBuffer),
                                             &zPlaintextLen);
-    
-    /* Giải phóng ciphertext ngay sau khi giải mã xong */
-    free(pu8Ciphertext);
 
     if (eErr == ESP_OK && zPlaintextLen > 0U) {
         ESP_LOGI(TAG, "Giải mã payload thành công, nội dung: %s", acPlaintextBuffer);
 
-        /* 4. Phân tích nội dung JSON bên trong chuỗi plaintext sau giải mã (Chỉ parse 1 lần duy nhất) */
+        /* 4. Phân tích nội dung JSON bên trong chuỗi plaintext sau giải mã */
         cJSON *jsInnerJson = cJSON_Parse(acPlaintextBuffer);
         if (jsInnerJson != NULL) {
             const cJSON *jsParam = cJSON_GetObjectItem(jsInnerJson, "param");
@@ -110,33 +98,25 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
                     if (iValue == 1) {
                         (void)app_logic_relay_Open();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Mở cửa (UP)");
-                        /* Tắt toàn bộ và chỉ bật LED số 0 (Xanh lá) */
                         (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
-                        ESP_LOGI(TAG, "-> Đã set màu led"); 
                     }
                 } 
                 else if (strcmp(pcParam, "gate_1") == 0 || strcmp(pcParam, "down") == 0) {
                     if (iValue == 1) {
                         (void)app_logic_relay_Close();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Đóng cửa (DOWN)");
-                        /* Tắt toàn bộ và chỉ bật LED số 1 xanh */
                         (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
-                        ESP_LOGI(TAG, "-> Đã set màu led"); 
                     }
                 } 
                 else if (strcmp(pcParam, "gate_2") == 0 || strcmp(pcParam, "stop") == 0) {
                     if (iValue == 1) {
                         (void)app_logic_relay_Stop();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Dừng cửa (STOP)");
-                        /* Tắt toàn bộ và chỉ bật LED số 2 xanh*/
                         (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
-                        ESP_LOGI(TAG, "-> Đã set màu led"); 
                     }
-                }else if (strcmp(pcParam, "gate_level") == 0) {
-                    /* Kiểm tra giới hạn an toàn của giá trị % (0 đến 100) */
+                } 
+                else if (strcmp(pcParam, "gate_level") == 0) {
                     if (iValue >= 0 && iValue <= 100) {
-                        ESP_LOGI(TAG, "-> Thực thi lệnh: Điều khiển cửa đến mức %d%%", iValue);
-                        
                         uint8_t u8TargetVal = (uint8_t)iValue;
                         uint8_t u8CurrentVal = app_logic_relay_GetCurrentLevel();
                         
@@ -144,20 +124,17 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
                         
                         if (u8TargetVal > u8CurrentVal) {
                             (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
-                        } 
-                        else if (u8TargetVal < u8CurrentVal) {
+                        } else if (u8TargetVal < u8CurrentVal) {
                             (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
-                        } 
-                        else {
+                        } else {
                             (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
                         }
 
                         app_logic_relay_SetLevel(u8TargetVal);
- 
                     } else {
-                        ESP_LOGW(TAG, "Giá trị gate_level không hợp lệ (ngoài dải 0-100): %d", iValue);
+                        ESP_LOGW(TAG, "Giá trị gate_level không hợp lệ: %d", iValue);
                     }
-                }else {
+                } else {
                     ESP_LOGW(TAG, "Param điều khiển không được hỗ trợ: %s", pcParam);
                 }
             } else {
@@ -170,7 +147,6 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
         ESP_LOGE(TAG, "Giải mã vconnex payload thất bại, mã lỗi: %d", (int)eErr);
     }
 }
-
 
 /**
  * @brief   Giải mã và xử lý bản tin CmdAddSchedule (Hẹn giờ)
@@ -443,9 +419,9 @@ static void app_logic_mqtt_Task(void *pArg)
 
     while (true) {
         if (xQueueReceive(g_xMqttQueue, &sItem, portMAX_DELAY) == pdPASS) {
-            if (sItem.pcData != NULL && sItem.u32DataLen > 0U) {
+            if ( sItem.u32DataLen > 0U) {
                 /* Parse chuỗi JSON payload nhận được từ hàng đợi */
-                cJSON *jsRoot = cJSON_Parse(sItem.pcData);
+                cJSON *jsRoot = cJSON_Parse(sItem.acData);
                 if (jsRoot != NULL) {
                     const cJSON *jsName = cJSON_GetObjectItem(jsRoot, "name");
                     const cJSON *jsValue = cJSON_GetObjectItem(jsRoot, "value");
@@ -509,11 +485,8 @@ static void app_logic_mqtt_Task(void *pArg)
                     }
                     cJSON_Delete(jsRoot);
                 } else {
-                    ESP_LOGE(TAG, "cJSON_Parse thất bại với chuỗi payload: %s", sItem.pcData);
+                    ESP_LOGE(TAG, "cJSON_Parse thất bại với chuỗi payload: %s", sItem.acData);
                 }
-
-                free(sItem.pcData);
-                sItem.pcData = NULL;
             }
         }
     }
@@ -531,7 +504,7 @@ esp_err_t app_logic_mqtt_Init(void)
     
     BaseType_t xRet = xTaskCreate(app_logic_mqtt_Task, 
                                   "mqtt_logic_task", 
-                                  DF_TASK_STACK_NETWORK, 
+                                  DF_TASK_STACK_LARGE, 
                                   NULL, 
                                   DF_TASK_PRIO_NORMAL, 
                                   NULL);
@@ -549,26 +522,31 @@ esp_err_t app_logic_mqtt_Init(void)
 /**
  * @brief   Đưa dữ liệu bản tin thô vào hàng đợi an toàn không gây nghẽn ngắt mạng.
  */
+/**
+ * @brief   Đưa dữ liệu bản tin thô vào hàng đợi an toàn không gây nghẽn ngắt mạng.
+ */
 esp_err_t app_logic_mqtt_EnqueueData(const char *pcData, uint32_t u32DataLen)
 {
     if (g_xMqttQueue == NULL || pcData == NULL || u32DataLen == 0U) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    app_logic_mqtt_queue_item_t sItem;
-    sItem.u32DataLen = u32DataLen;
-    sItem.pcData = (char *)malloc((size_t)u32DataLen + 1U);
-    if (sItem.pcData == NULL) {
+    /* KIỂM TRA MỚI: Bỏ qua nếu payload vượt quá kích thước bộ đệm cho phép */
+    if (u32DataLen >= DF_APP_MQTT_MAX_PAYLOAD_SIZE) {
+        ESP_LOGE(TAG, "Gói tin MQTT vượt quá kích thước đệm tĩnh (%u bytes)", (unsigned int)u32DataLen);
         return ESP_ERR_NO_MEM;
     }
 
-    (void)memcpy(sItem.pcData, pcData, (size_t)u32DataLen);
-    sItem.pcData[u32DataLen] = '\0';
+    app_logic_mqtt_queue_item_t sItem;
+    sItem.u32DataLen = u32DataLen;
+    
+    /* SỬA ĐỔI: Copy chuỗi vào mảng tĩnh acData, loại bỏ malloc */
+    (void)memcpy(sItem.acData, pcData, (size_t)u32DataLen);
+    sItem.acData[u32DataLen] = '\0';
 
     /* Đưa vào Queue với timeout = 0 để tránh block luồng mạng lõi */
     if (xQueueSend(g_xMqttQueue, &sItem, 0U) != pdPASS) {
-        free(sItem.pcData);
-        sItem.pcData = NULL;
+        ESP_LOGW(TAG, "Hàng đợi MQTT đã đầy, bỏ qua bản tin!");
         return ESP_ERR_TIMEOUT;
     }
     
