@@ -540,3 +540,47 @@ esp_err_t app_nvs_GetAllSchedules(app_schedule_item_t *pasSchedules, uint8_t *pu
   nvs_close(xNvsHandle);
   return eErr;
 }
+
+
+// Delete Device Configuration from NVS
+esp_err_t app_nvs_ClearDeviceConfig(void) {
+  nvs_handle_t hHandle = 0U;
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
+  if (eErr == ESP_OK) {
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_DEV_TYPE);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_DEV_EXT_ADDR);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_BROKER);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_USERNAME);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_PASSWORD);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_MQTT_SUB);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_MQTT_PUB);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_MQTT_ALERT);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_FORCE_OTA_URL);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_BE_SHARED_KEY);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_API_URL);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_API_SECRET_KEY);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_USER_ID);
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_DEV_PROVISIONED);
+    eErr = nvs_commit(hHandle);
+    (void)nvs_close(hHandle);
+  }
+  if (eErr == ESP_OK) {
+    ESP_LOGI(TAG, "Đã xóa cấu hình thiết bị (Device Config)");
+  }
+  return eErr;
+}
+
+// Delete Extra Config from NVS
+esp_err_t app_nvs_ClearExtraConfig(void) {
+  nvs_handle_t hHandle = 0U;
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
+  if (eErr == ESP_OK) {
+    (void)nvs_erase_key(hHandle, DF_APP_STORAGE_KEY_EXTRA_CONFIG);
+    eErr = nvs_commit(hHandle);
+    (void)nvs_close(hHandle);
+  }
+  if (eErr == ESP_OK) {
+    ESP_LOGI(TAG, "Đã xóa Extra Config");
+  }
+  return eErr;
+}

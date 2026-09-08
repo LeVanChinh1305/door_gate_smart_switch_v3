@@ -12,6 +12,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include <sys/time.h>
 #include "cJSON.h"
 #include <string.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@
 #include "app_logic_mqtt_publisher.h" 
 #include "app_logic_extra_config.h"
 #include <time.h>
+#include "app_nvs.h"
 
 static const char *TAG = "APP_LOGIC_MQTT";
 
@@ -169,10 +171,7 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
     }
 }
 
-/**
- * @brief   Giải mã và xử lý bản tin CmdAddSchedule (Hẹn giờ)
- * @param   jsRoot Con trỏ cJSON trỏ tới gốc của gói tin JSON.
- */
+
 /**
  * @brief   Giải mã và xử lý bản tin CmdAddSchedule (Hẹn giờ)
  */
@@ -228,10 +227,6 @@ static void app_logic_mqtt_HandleAddAndUpdateSchedule(cJSON **ppjsRoot, const ch
     size_t zPlaintextLen = 0U;
     (void)memset(acPlaintextBuffer, 0, sizeof(acPlaintextBuffer));
 
-    /* ====================================================================
-     * QUAN TRỌNG: DỌN DẸP RAM TRƯỚC KHI GIẢI MÃ
-     * Xóa toàn bộ cây JSON để gộp lại RAM trống cho Hardware AES
-     * ==================================================================== */
     cJSON_Delete(*ppjsRoot);
     *ppjsRoot = NULL; /* Gán NULL để vòng lặp Task bên ngoài không xóa đúp gây Crash */
 
@@ -309,6 +304,7 @@ static void app_logic_mqtt_HandleAddAndUpdateSchedule(cJSON **ppjsRoot, const ch
         ESP_LOGE(TAG, "Giải mã CmdAddSchedule thất bại, mã lỗi: %d", (int)eErr);
     }
 }
+
 /**
  * @brief   Giải mã và xử lý bản tin CmdDelSchedule (Xóa hẹn giờ)
  * @param   jsRoot Con trỏ cJSON trỏ tới gốc của gói tin JSON.
@@ -365,6 +361,77 @@ static void app_logic_mqtt_HandleDeleteSchedule(const cJSON *jsRoot)
         }
     }
 }
+
+/**
+ * @brief trả lại lệnh delete endpoint
+ */
+static void app_logic_mqtt_HandleDeleteEndpointConfig(const char *pcCmdName)
+{
+    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    if (psConfig == NULL) return;
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
+
+    char acResponse[256];
+    snprintf(acResponse, sizeof(acResponse),
+             "{"
+             "\"name\":\"%s\","
+             "\"devT\":%u,"
+             "\"devExtAddr\":\"%s\","
+             "\"timestamp\":%llu,"
+             "\"errorCode\":50000"
+             "}",
+             pcCmdName,
+             (unsigned int)psConfig->dev_type,
+             psConfig->dev_ext_addr,
+             (unsigned long long)u64Timestamp);
+
+    (void)app_logic_mqtt_publisher_SendResponse(acResponse);
+    ESP_LOGI(TAG, "Đã phản hồi thành công lệnh %s", pcCmdName);
+}
+
+
+/**
+ * @brief 
+ */
+static void app_logic_mqtt_HandleDeleteDevice(const char *pcCmdName)
+{
+    /* 1. Lấy thông tin thiết bị từ RAM/NVS để phản hồi */
+    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    if (psConfig == NULL) return;
+
+    /* 2. Đóng gói JSON phản hồi rút gọn theo Spec */
+    char acResponse[192];
+    snprintf(acResponse, sizeof(acResponse),
+             "{"
+             "\"name\":\"%s\","
+             "\"devT\":%u,"
+             "\"devExtAddr\":\"%s\""
+             "}",
+             pcCmdName,
+             (unsigned int)psConfig->dev_type,
+             psConfig->dev_ext_addr);
+
+    /* 3. Đẩy bản tin phản hồi lên Broker */
+    (void)app_logic_mqtt_publisher_SendResponse(acResponse);
+    ESP_LOGI(TAG, "Đã gửi bản tin phản hồi: %s", acResponse);
+
+    /* 4. Trễ 1 giây để TCP/TLS kịp truyền bản tin ra mạng */
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    /* 5. Tiến hành xóa sạch NVS */
+    ESP_LOGI(TAG, "Đang xóa NVS và khởi động lại...");
+    app_nvs_DeleteAllSchedules();
+    app_nvs_ClearExtraConfig();
+    app_nvs_ClearDeviceConfig();
+    app_nvs_ClearWifiConfig();
+
+    /* 6. Reboot thiết bị */
+    esp_restart();
+}
+
 /**
  * @brief   Task nền chuyên trách nhận bản tin từ Queue, phân loại lệnh và điều phối xử lý.
  * @param   pArg Tham số truyền vào task (không sử dụng).
@@ -428,8 +495,13 @@ static void app_logic_mqtt_Task(void *pArg)
                         }else if (strcmp(pcCmdName, "CmdDeleteSchedule") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdDeleteSchedule, đang xử lý xóa...");
                             app_logic_mqtt_HandleDeleteSchedule(jsRoot);
-                        }
-                        else {
+                        }else if (strcmp(pcCmdName, "CmdDeleteEndpointConfig") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdDeleteEndpointConfig");
+                            app_logic_mqtt_HandleDeleteEndpointConfig(pcCmdName);
+                        }else if (strcmp(pcCmdName, "CmdDeleteDevice") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdDeleteDevice, tiến hành xóa thiết bị...");
+                            app_logic_mqtt_HandleDeleteDevice(pcCmdName); 
+                        }else {
                             ESP_LOGW(TAG, "-> Lệnh MQTT chưa được định nghĩa: %s", pcCmdName);
                         }
                     } else {

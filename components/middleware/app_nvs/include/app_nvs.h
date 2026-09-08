@@ -169,6 +169,16 @@ esp_err_t app_nvs_DeleteAllSchedules(void);
  */
 esp_err_t app_nvs_GetAllSchedules(app_schedule_item_t *pasSchedules, uint8_t *pu8Count);
 
+/**
+ * @brief Xóa sạch cấu hình thiết bị (MQTT, Broker, Secret Key) trong NVS.
+ */
+esp_err_t app_nvs_ClearDeviceConfig(void);
+
+/**
+ * @brief Xóa cấu hình phụ ExtraConfig trong NVS.
+ */
+esp_err_t app_nvs_ClearExtraConfig(void);
+
 #ifdef __cplusplus
 }
 #endif

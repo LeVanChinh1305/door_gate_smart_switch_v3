@@ -132,6 +132,7 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         .task.stack_size = DF_TASK_STACK_LARGE, 
         .task.priority = DF_TASK_PRIO_NORMAL,   
         .buffer.size = 4096,
+        .outbox.limit = 1024 * 4, // giới hạn bộ đệm Outbox tối đa 4KB 
     };
 
     g_xMqttClient = esp_mqtt_client_init(&sMqttCfg); 

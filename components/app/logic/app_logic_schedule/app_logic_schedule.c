@@ -52,6 +52,18 @@ static void app_schedule_task(void *pArg)
                                 } else if (strcmp(asSchedules[i].acParam, "stop") == 0 || strcmp(asSchedules[i].acParam, "gate_2") == 0) {
                                     app_logic_relay_Stop();
                                 }
+
+                                /* 2. XỬ LÝ LỊCH CHẠY 1 LẦN (loopDays = 0) */
+                                if (asSchedules[i].u8LoopDays == 0) {
+                                    asSchedules[i].u8Activate = 0; /* Tắt kích hoạt */
+                                    
+                                    esp_err_t err = app_nvs_SaveSchedule(&asSchedules[i]);
+                                    if (err == ESP_OK) {
+                                        ESP_LOGI(TAG, "Đã tự động vô hiệu hóa lịch 1 lần ID: %u trong NVS", (unsigned int)asSchedules[i].u32Id);
+                                    } else {
+                                        ESP_LOGE(TAG, "Lỗi khi cập nhật trạng thái lịch 1 lần vào NVS: %s", esp_err_to_name(err));
+                                    }
+                                }
                             }
                         }
                     }

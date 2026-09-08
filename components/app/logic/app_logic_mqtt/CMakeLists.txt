@@ -11,4 +11,6 @@ idf_component_register(
         app_led_state 
         app_logic_mqtt_publisher 
         app_logic_extra_config
+        app_nvs
+        esp_timer
 )
