@@ -206,12 +206,10 @@ esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, u
         return ESP_FAIL;
     }
 
-    /* Lấy Timestamp hiện tại */
     struct timeval tv;
     gettimeofday(&tv, NULL);
     uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
 
-    /* Đóng gói JSON theo đúng chuẩn của tài liệu Vconnex */
     char acResponse[256];
     snprintf(acResponse, sizeof(acResponse),
              "{"
@@ -229,6 +227,5 @@ esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, u
              (unsigned int)u32Id,
              iErrorCode);
 
-    /* Đẩy bản tin lên broker */
     return app_logic_mqtt_publisher_SendResponse(acResponse);
 }

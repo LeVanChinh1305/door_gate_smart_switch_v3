@@ -16,10 +16,12 @@ set(EXTRA_COMPONENT_DIRS
 	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_mqtt
 	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_extra_config
 	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_mqtt_publisher
+	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_schedule
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_nvs
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_wifi
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_blufi
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_mqtt
+	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_sntp
 	${CMAKE_CURRENT_LIST_DIR}/components/app/mqtt_vconnex_decrypt 
 	${CMAKE_CURRENT_LIST_DIR}/components/common
 	${CMAKE_CURRENT_LIST_DIR}/components/app/device/app_device_state

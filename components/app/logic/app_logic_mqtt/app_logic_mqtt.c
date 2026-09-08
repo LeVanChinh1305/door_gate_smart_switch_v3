@@ -173,13 +173,22 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
  * @brief   Giải mã và xử lý bản tin CmdAddSchedule (Hẹn giờ)
  * @param   jsRoot Con trỏ cJSON trỏ tới gốc của gói tin JSON.
  */
-static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
+/**
+ * @brief   Giải mã và xử lý bản tin CmdAddSchedule (Hẹn giờ)
+ */
+static void app_logic_mqtt_HandleAddAndUpdateSchedule(cJSON **ppjsRoot, const char *pcCmdName)
 {
-    if (jsRoot == NULL) {
+    if (ppjsRoot == NULL || *ppjsRoot == NULL) {
         return;
     }
 
-    /* 1. Tìm mảng valueEncrypt (Dự phòng cả 2 trường hợp JSON từ Server) */
+    /* 0. TẠO BẢN SAO CHUỖI TÊN LỆNH TRÊN STACK (Tránh bị xoá mất khi cJSON_Delete) */
+    char acCmdNameCopy[32];
+    snprintf(acCmdNameCopy, sizeof(acCmdNameCopy), "%s", pcCmdName);
+    
+    cJSON *jsRoot = *ppjsRoot;
+
+    /* 1. Tìm mảng valueEncrypt */
     const cJSON *jsEncryptArray = cJSON_GetObjectItem(jsRoot, "valueEncrypt");
     if (!cJSON_IsArray(jsEncryptArray)) {
         const cJSON *jsValue = cJSON_GetObjectItem(jsRoot, "value");
@@ -199,7 +208,7 @@ static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
         return;
     }
 
-    /* 2. Ép kiểu dữ liệu mảng JSON sang mảng byte (Không dùng malloc)[cite: 21] */
+    /* 2. Ép kiểu dữ liệu mảng JSON sang mảng byte trên Stack */
     uint8_t au8Ciphertext[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
     (void)memset(au8Ciphertext, 0, sizeof(au8Ciphertext));
 
@@ -219,7 +228,14 @@ static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
     size_t zPlaintextLen = 0U;
     (void)memset(acPlaintextBuffer, 0, sizeof(acPlaintextBuffer));
 
-    /* Gọi API giải mã AES-256-CBC chuẩn của hệ thống*/
+    /* ====================================================================
+     * QUAN TRỌNG: DỌN DẸP RAM TRƯỚC KHI GIẢI MÃ
+     * Xóa toàn bộ cây JSON để gộp lại RAM trống cho Hardware AES
+     * ==================================================================== */
+    cJSON_Delete(*ppjsRoot);
+    *ppjsRoot = NULL; /* Gán NULL để vòng lặp Task bên ngoài không xóa đúp gây Crash */
+
+    /* 4. Gọi API giải mã AES-256-CBC */
     esp_err_t eErr = decrypt_vconnex_payload(au8Ciphertext, (size_t)iCipherLen,
                                              psConfig->api_secret_key,
                                              acPlaintextBuffer, sizeof(acPlaintextBuffer),
@@ -232,13 +248,11 @@ static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
             app_schedule_item_t sNewSchedule;
             (void)memset(&sNewSchedule, 0, sizeof(app_schedule_item_t));
 
-            /* Lấy ID và trạng thái kích hoạt */
             cJSON *jsId = cJSON_GetObjectItem(jsParsed, "id");
             cJSON *jsActivate = cJSON_GetObjectItem(jsParsed, "activate");
             sNewSchedule.u32Id = (jsId && cJSON_IsNumber(jsId)) ? (uint32_t)jsId->valueint : 0U;
             sNewSchedule.u8Activate = (jsActivate && cJSON_IsNumber(jsActivate)) ? (uint8_t)jsActivate->valueint : 1U;
 
-            /* Truy xuất khối Điều kiện (Condition) để tính giờ */
             cJSON *jsCondition = cJSON_GetObjectItem(jsParsed, "condition");
             if (jsCondition) {
                 cJSON *jsCondValues = cJSON_GetObjectItem(jsCondition, "values");
@@ -247,10 +261,8 @@ static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
                     cJSON *jsLoopDays = cJSON_GetObjectItem(jsCondVal0, "loopDays");
                     sNewSchedule.u8LoopDays = (jsLoopDays && cJSON_IsNumber(jsLoopDays)) ? (uint8_t)jsLoopDays->valueint : 0U;
 
-                    /* Xử lý executionTime (Unix Timestamp) */
                     cJSON *jsExeTime = cJSON_GetObjectItem(jsCondVal0, "executionTime");
                     if (jsExeTime && cJSON_IsNumber(jsExeTime)) {
-                        /* Chuyển đổi timestamp Unix (Giây) sang cấu trúc thời gian cục bộ (localtime) */
                         time_t tExecution = (time_t)jsExeTime->valueint;
                         struct tm sTimeInfo;
                         tExecution += (7 * 3600); // Bù UTC+7 (Việt Nam)
@@ -263,7 +275,6 @@ static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
                 }
             }
 
-            /* Truy xuất khối Hành động (Action) */
             cJSON *jsAction = cJSON_GetObjectItem(jsParsed, "action");
             cJSON *jsAction0 = cJSON_GetArrayItem(jsAction, 0);
             if (jsAction0) {
@@ -283,18 +294,14 @@ static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
                 }
             }
 
-            /* TODO: Gọi hàm lưu sNewSchedule vào bộ nhớ NVS tại đây */
             esp_err_t err = app_nvs_SaveSchedule(&sNewSchedule);
             if (err == ESP_OK) {
                 ESP_LOGI(TAG, "Đã lưu lịch hẹn giờ vào NVS thành công!");
-                /* Phản hồi thành công: 50000 */
-                app_logic_mqtt_publisher_ReportScheduleResult("CmdAddSchedule", sNewSchedule.u32Id, 50000);
+                app_logic_mqtt_publisher_ReportScheduleResult(acCmdNameCopy, sNewSchedule.u32Id, 50000);
             } else if (err == ESP_ERR_NO_MEM) {
-                /* Phản hồi lỗi đầy bộ nhớ: 50007 */
-                app_logic_mqtt_publisher_ReportScheduleResult("CmdAddSchedule", sNewSchedule.u32Id, 50007);
+                app_logic_mqtt_publisher_ReportScheduleResult(acCmdNameCopy, sNewSchedule.u32Id, 50007);
             } else {
-                /* Phản hồi lỗi dữ liệu khác: 50005 */
-                app_logic_mqtt_publisher_ReportScheduleResult("CmdAddSchedule", sNewSchedule.u32Id, 50005);
+                app_logic_mqtt_publisher_ReportScheduleResult(acCmdNameCopy, sNewSchedule.u32Id, 50005);
             }
             cJSON_Delete(jsParsed);
         }
@@ -302,7 +309,6 @@ static void app_logic_mqtt_HandleAddSchedule(const cJSON *jsRoot)
         ESP_LOGE(TAG, "Giải mã CmdAddSchedule thất bại, mã lỗi: %d", (int)eErr);
     }
 }
-
 /**
  * @brief   Giải mã và xử lý bản tin CmdDelSchedule (Xóa hẹn giờ)
  * @param   jsRoot Con trỏ cJSON trỏ tới gốc của gói tin JSON.
@@ -415,10 +421,10 @@ static void app_logic_mqtt_Task(void *pArg)
                         }else if (strcmp(pcCmdName, "CmdSetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdSetData, tiến hành gọi hàm giải mã...");
                             app_logic_mqtt_HandleSetData(jsValue);
-                        }else if (strcmp(pcCmdName, "CmdAddSchedule") == 0) {
-                            ESP_LOGI(TAG, "-> Khớp lệnh CmdAddSchedule, đang giải mã...");
-                            /* Truyền thẳng jsRoot vào hàm để hàm tự rà soát cấu trúc */
-                            app_logic_mqtt_HandleAddSchedule(jsRoot);
+                        }else if (strcmp(pcCmdName, "CmdAddSchedule") == 0 || strcmp(pcCmdName, "CmdUpdateSchedule") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh %s, đang giải mã...", pcCmdName);
+                            /* Truyền địa chỉ của jsRoot để hàm con có thể xóa và gán NULL */
+                            app_logic_mqtt_HandleAddAndUpdateSchedule(&jsRoot, pcCmdName);
                         }else if (strcmp(pcCmdName, "CmdDeleteSchedule") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdDeleteSchedule, đang xử lý xóa...");
                             app_logic_mqtt_HandleDeleteSchedule(jsRoot);

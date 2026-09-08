@@ -15,4 +15,5 @@ idf_component_register(
         log 
         app_led_state
         app_relay_state
+        app_logic_schedule
 )

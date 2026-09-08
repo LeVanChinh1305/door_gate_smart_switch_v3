@@ -163,6 +163,12 @@ esp_err_t app_nvs_SaveSchedule(const app_schedule_item_t *psNewSchedule);
 esp_err_t app_nvs_DeleteSchedule(uint32_t u32Id);
 esp_err_t app_nvs_DeleteAllSchedules(void);
 
+/**
+ * @brief đọc danh sách lịch
+ * 
+ */
+esp_err_t app_nvs_GetAllSchedules(app_schedule_item_t *pasSchedules, uint8_t *pu8Count);
+
 #ifdef __cplusplus
 }
 #endif

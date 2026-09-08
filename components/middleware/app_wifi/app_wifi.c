@@ -15,6 +15,7 @@
 #include "nvs.h"
 #include "app_blufi.h"
 #include "app_device_state.h"
+#include "app_sntp.h"
 
 static const char *TAG = "APP_WIFI";
 static int32_t g_i32WifiRetryCount = 0;
@@ -84,6 +85,8 @@ static void wifi_event_handler(void *pArg, esp_event_base_t eEventBase, int32_t 
                 if (app_blufi_IsConnected()) {
                     app_blufi_ReportWifiStatus(true);
                 }
+                ESP_LOGI(TAG, "tiến hành đồng bộ SNTP...");
+                app_sntp_Init();
                 break;
             }
 

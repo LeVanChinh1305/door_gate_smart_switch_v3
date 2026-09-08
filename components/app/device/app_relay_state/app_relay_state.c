@@ -33,11 +33,11 @@ esp_err_t app_relay_state_Init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    g_eCurrentRelayState = E_RELAY_STATE_STOPPED;
+    g_eCurrentRelayState = E_RELAY_STATE_CLOSED;
     g_u8CallbackCount = 0;
     g_bIsReady = true;
 
-    ESP_LOGI(TAG, "Khởi tạo module app_relay_state thành công. Trạng thái ban đầu: STOPPED");
+    ESP_LOGI(TAG, "Khởi tạo module app_relay_state thành công. Trạng thái ban đầu: CLOSED");
     return ESP_OK;
 }
 

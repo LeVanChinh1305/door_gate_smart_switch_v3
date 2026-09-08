@@ -17,6 +17,7 @@
 #include "app_logic_touch.h"
 #include "app_mqtt.h"
 #include "app_wifi.h"
+#include "app_logic_schedule.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -40,25 +41,27 @@ void app_main(void) {
   // 2. Khởi tạo các module nghiệp vụ tầng Application
   eRet = app_logic_relay_Init();
   if (eRet != ESP_OK) {
-    ESP_LOGE(TAG, "Khởi tạo logic relay thất bại! Mã lỗi: %s",
-             esp_err_to_name(eRet));
+    ESP_LOGE(TAG, "Khởi tạo logic relay thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
     return;
   }
+  ESP_LOGI(TAG, "khởi tạo logic relay thành công"); 
   app_relay_state_Init();
-  app_relay_state_SetState(E_RELAY_STATE_STOPPED);
+  app_relay_state_SetState(E_RELAY_STATE_CLOSED);
+  ESP_LOGI(TAG, "Đã set trạng thái cửa khi khởi động là đóng hoàn toàn"); 
 
   eRet = app_logic_touch_Init();
   if (eRet != ESP_OK) {
-    ESP_LOGE(TAG, "Khởi tạo logic cảm ứng thất bại! Mã lỗi: %s",
-             esp_err_to_name(eRet));
+    ESP_LOGE(TAG, "Khởi tạo logic cảm ứng thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
     return;
   }
+  ESP_LOGI(TAG, "Khởi tạo logic cảm ứng nút bấm thành công"); 
 
   eRet = app_logic_led_Init();
   if (eRet != ESP_OK) {
     ESP_LOGE(TAG, "Khởi tạo logic LED thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
     return;
   }
+  ESP_LOGI(TAG, "Khởi tạo logic LED thành công"); 
   app_led_state_Init();
   app_led_state_SetState(E_LED_STATE_NORMAL_IDLE);
 
@@ -67,10 +70,17 @@ void app_main(void) {
     ESP_LOGE(TAG, "Khởi tạo logic buzzer thất bại! Mã lỗi: %s",esp_err_to_name(eRet));
     return;
   }
+  ESP_LOGI(TAG, "Khởi tạo logic buzzer thành công");
 
   eRet = app_logic_mqtt_Init();
   if (eRet != ESP_OK) {
     ESP_LOGE(TAG, "Khởi tạo logic MQTT thất bại! Mã lỗi: %s",esp_err_to_name(eRet));
+    return;
+  }
+  ESP_LOGI(TAG, "Khởi tạo logic MQTT thành công");
+  eRet = app_logic_schedule_Init();
+  if (eRet != ESP_OK) {
+    ESP_LOGE(TAG, "Khởi tạo lập lịch thất bại! Mã lỗi: %s",esp_err_to_name(eRet));
     return;
   }
 
@@ -79,6 +89,7 @@ void app_main(void) {
   if (eRet != ESP_OK) {
     ESP_LOGW(TAG, "Khởi tạo Wi-Fi STA gặp sự cố, kiểm tra trạng thái thiết bị...");
   }
+  ESP_LOGI(TAG, "Khởi tạo wifi STA thành công");
 
   // 5. Điều phối luồng khởi động dựa trên trạng thái thiết bị
   device_mode_t eCurrentMode = get_current_door_mode();
@@ -90,7 +101,7 @@ void app_main(void) {
     if (!app_nvs_IsProvisionedWifiConfig()) {
       ESP_LOGI(TAG,"Chưa có Wi-Fi trong NVS, đang chờ lệnh kết nối thủ công/ tự động");
     } else {
-      ESP_LOGI(TAG,"Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái Normal...");
+      ESP_LOGI(TAG,"Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái khóa tự động...");
       set_current_door_mode(DEVICE_MODE_LOCKED);
       app_led_state_SetState(E_LED_STATE_LOCKED);
     }

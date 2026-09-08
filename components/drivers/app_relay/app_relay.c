@@ -78,8 +78,7 @@ esp_err_t app_relay_Init(void)
 
     g_bIsReady = true;
 
-    ESP_LOGI(TAG, "Khởi tạo GPIO relay thành công (CLOSE=GPIO%d, OPEN=GPIO%d, STOP=GPIO%d)",
-             DF_RELAY_PIN_CLOSE, DF_RELAY_PIN_OPEN, DF_RELAY_PIN_STOP);
+    ESP_LOGI(TAG, "Khởi tạo GPIO relay thành công (CLOSE=GPIO%d, OPEN=GPIO%d, STOP=GPIO%d)", DF_RELAY_PIN_CLOSE, DF_RELAY_PIN_OPEN, DF_RELAY_PIN_STOP);
     return ESP_OK;
 }
 

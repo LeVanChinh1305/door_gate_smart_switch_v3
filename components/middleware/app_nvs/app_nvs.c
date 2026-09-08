@@ -524,3 +524,19 @@ esp_err_t app_nvs_DeleteAllSchedules(void)
     nvs_close(xNvsHandle);
     return eErr;
 }
+
+
+esp_err_t app_nvs_GetAllSchedules(app_schedule_item_t *pasSchedules, uint8_t *pu8Count){
+  *pu8Count = 0; 
+  nvs_handle_t xNvsHandle; 
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &xNvsHandle);
+  if(eErr != ESP_OK) return eErr;
+  size_t zLength = DF_MAX_SCHEDULES * sizeof(app_schedule_item_t);
+  eErr = nvs_get_blob(xNvsHandle, "schedules", pasSchedules, &zLength);
+  if (eErr == ESP_OK) {
+      *pu8Count = (uint8_t)(zLength / sizeof(app_schedule_item_t));
+  }
+  
+  nvs_close(xNvsHandle);
+  return eErr;
+}

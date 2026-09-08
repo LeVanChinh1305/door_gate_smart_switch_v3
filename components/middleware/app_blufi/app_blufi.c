@@ -252,9 +252,7 @@ void app_blufi_ReportWifiStatus(bool is_connected) {
         WIFI_MODE_STA, ESP_BLUFI_STA_CONN_SUCCESS, 0, &info);
     if (ret == ESP_OK) {
       ESP_LOGI(TAG, "Đã gửi báo cáo Wi-Fi KẾT NỐI THÀNH CÔNG cho App");
-      ESP_LOGI(
-          TAG,
-          "Gửi CmdGetDeviceID, chờ App gửi CmdSetDeviceConfig để lưu cấu hình");
+      ESP_LOGI( TAG, "Gửi CmdGetDeviceID, chờ App gửi CmdSetDeviceConfig để lưu cấu hình");
       const int32_t i32DeviceType = (g_sCurrentDeviceConfig.dev_type != 0)
                                         ? g_sCurrentDeviceConfig.dev_type
                                         : DF_BLUFI_DEVICE_TYPE_DEFAULT;
@@ -265,8 +263,7 @@ void app_blufi_ReportWifiStatus(bool is_connected) {
 
   } else {
     // Gửi báo cáo thất bại
-    (void)esp_blufi_send_wifi_conn_report(WIFI_MODE_STA,
-                                          ESP_BLUFI_STA_CONN_FAIL, 0, &info);
+    (void)esp_blufi_send_wifi_conn_report(WIFI_MODE_STA, ESP_BLUFI_STA_CONN_FAIL, 0, &info);
     ESP_LOGE(TAG, "Đã gửi báo cáo Wi-Fi KẾT NỐI THẤT BẠI cho App");
   }
 }
@@ -275,12 +272,10 @@ bool app_blufi_IsConnected(void) {
   return g_bBlufiActive && g_bBlufiBleConnected;
 }
 
-static void blufi_event_callback(esp_blufi_cb_event_t event,
-                                 esp_blufi_cb_param_t *param) {
+static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_t *param) {
   switch (event) {
   case ESP_BLUFI_EVENT_INIT_FINISH:
-    ESP_LOGI(TAG,
-             "Khởi tạo BLUFI hoàn tất -> Đang cấu hình dữ liệu quảng bá...");
+    ESP_LOGI(TAG,"Khởi tạo BLUFI hoàn tất -> Đang cấu hình dữ liệu quảng bá...");
     g_bBlufiActive = true;
     esp_ble_gap_config_adv_data(&blufi_adv_data);
     break;
@@ -301,13 +296,10 @@ static void blufi_event_callback(esp_blufi_cb_event_t event,
     g_bBlufiBleConnected = false;
     if (g_bShutdownAfterDisconnect) {
       g_bShutdownAfterDisconnect = false;
-      ESP_LOGI(
-          TAG,
-          "Đã nhận disconnect sau CmdSetDeviceConfig -> Tắt toàn bộ BLUFI");
+      ESP_LOGI(TAG,"Đã nhận disconnect sau CmdSetDeviceConfig -> Tắt toàn bộ BLUFI");
       (void)app_blufi_Deinit();
     } else if (g_bBlufiActive) {
-      ESP_LOGI(TAG, "Thiết bị Bluetooth đã ngắt kết nối -> Bắt đầu phát lại "
-                    "quảng bá BLE");
+      ESP_LOGI(TAG, "Thiết bị Bluetooth đã ngắt kết nối -> Bắt đầu phát lại quảng bá BLE");
       ESP_LOGI(TAG, "Bắt đầu phát lại quảng bá BLE...");
       esp_ble_gap_start_advertising(&blufi_adv_params);
     }
@@ -336,8 +328,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event,
     ESP_LOGI(TAG, "BLUFI yêu cầu kết nối tới điểm truy cập Wi-Fi (AP)...");
 
     if (app_wifi_IsConnected()) {
-      ESP_LOGI(TAG,
-               "Wi-Fi đã ở trạng thái kết nối, gửi lại báo cáo cho App...");
+      ESP_LOGI(TAG, "Wi-Fi đã ở trạng thái kết nối, gửi lại báo cáo cho App...");
       app_blufi_ReportWifiStatus(true);
       break;
     }
@@ -356,8 +347,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event,
       (void)app_nvs_SaveWifiConfig(&sta_config);
       (void)app_nvs_SetProvisionedWifiConfig(true);
     } else {
-      ESP_LOGW(TAG, "Xóa cấu hình Wi-Fi cũ thất bại, mã lỗi=%s",
-               esp_err_to_name(eClearErr));
+      ESP_LOGW(TAG, "Xóa cấu hình Wi-Fi cũ thất bại, mã lỗi=%s", esp_err_to_name(eClearErr));
     }
 
     // 2. Cấu hình và Bắt đầu kết nối Wi-Fi
@@ -375,8 +365,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event,
     esp_wifi_get_mode(&mode);
 
     if (app_wifi_IsConnected()) {
-      esp_blufi_send_wifi_conn_report(mode, ESP_BLUFI_STA_CONN_SUCCESS, 0,
-                                      &info);
+      esp_blufi_send_wifi_conn_report(mode, ESP_BLUFI_STA_CONN_SUCCESS, 0,&info);
     } else {
       esp_blufi_send_wifi_conn_report(mode, ESP_BLUFI_STA_CONN_FAIL, 0, &info);
     }

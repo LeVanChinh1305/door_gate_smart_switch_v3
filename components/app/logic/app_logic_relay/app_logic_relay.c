@@ -229,7 +229,7 @@ esp_err_t app_logic_relay_Init(void)
     }
     xTaskResult = xTaskCreate(app_logic_relay_TrackingTask,
                                          "relay_tracking",
-                                         DF_TASK_STACK_MEDIUM, 
+                                         DF_TASK_STACK_NETWORK, 
                                          NULL,
                                          DF_TASK_PRIO_NORMAL,
                                          NULL);
