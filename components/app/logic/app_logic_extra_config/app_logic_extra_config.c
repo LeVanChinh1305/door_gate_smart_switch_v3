@@ -4,6 +4,9 @@
 #include "esp_log.h"
 #include <stdlib.h>
 #include "app_common.h" 
+#include "app_logic_mqtt_publisher.h"
+#include "app_mqtt.h"
+#include <sys/time.h>
 
 static const char *TAG = "APP_LOGIC_EXTRA_CFG";
 
@@ -141,13 +144,39 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
     UPDATE_CFG_UINT32(pValue, "lockRFEnd", g_sExtraConfig.lockRFEnd);
 
     /* Lưu vào NVS nếu có bất kỳ biến nào bị thay đổi so với cấu hình hiện tại */
+    esp_err_t eErr = ESP_OK;
     if (bConfigChanged) {
-        if (app_nvs_SaveExtraConfig(&g_sExtraConfig) == ESP_OK) {
+        eErr = app_nvs_SaveExtraConfig(&g_sExtraConfig);
+        if (eErr == ESP_OK) {
             ESP_LOGI(TAG, "Đã lưu bản cập nhật ExtraConfig xuống NVS");
         } else {
             ESP_LOGE(TAG, "Lỗi khi lưu ExtraConfig xuống NVS");
         }
     } else {
         ESP_LOGI(TAG, "Cấu hình không có thay đổi, bỏ qua việc lưu NVS");
+    }
+    /* ĐÓNG GÓI BẢN TIN PHẢN HỒI (ACK) ĐỂ TRÁNH SERVER TRUYỀN LẠI (RETRY) */
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
+    if (psConfig != NULL) {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
+
+        char acResponse[256];
+        snprintf(acResponse, sizeof(acResponse),
+                 "{"
+                 "\"name\":\"CmdSetExtraConfig\","
+                 "\"devT\":%u,"
+                 "\"devExtAddr\":\"%s\","
+                 "\"timeStamp\":%llu,"
+                 "\"errorCode\":%d"
+                 "}",
+                 (unsigned int)psConfig->dev_type,
+                 psConfig->dev_ext_addr,
+                 (unsigned long long)u64Timestamp,
+                 (eErr == ESP_OK) ? 50000 : 50005);
+
+        (void)app_logic_mqtt_publisher_SendResponse(acResponse);
+        ESP_LOGI(TAG, "Đã gửi phản hồi CmdSetExtraConfig (errorCode=%d)", (eErr == ESP_OK) ? 50000 : 50005);
     }
 }

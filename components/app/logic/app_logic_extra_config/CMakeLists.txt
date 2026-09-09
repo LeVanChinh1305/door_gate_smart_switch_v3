@@ -6,4 +6,5 @@ idf_component_register(
         app_nvs     
         common
         app_logic_led
+        app_mqtt
 )
