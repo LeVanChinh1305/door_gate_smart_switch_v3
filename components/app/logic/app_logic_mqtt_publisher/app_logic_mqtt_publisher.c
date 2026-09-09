@@ -221,14 +221,14 @@ esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, i
              "\"devT\":%u,"
              "\"devExtAddr\":\"%s\","
              "\"timestamp\":%llu,"
-             "\"id\":%u,"
+             "\"id\":%d,"
              "\"errorCode\":%d"
              "}",
              pcCmdName,
              (unsigned int)psConfig->dev_type,
              psConfig->dev_ext_addr,
              (unsigned long long)u64Timestamp,
-             (unsigned int)u32Id,
+             (int)i32Id,
              iErrorCode);
 
     return app_logic_mqtt_publisher_SendResponse(acResponse);
