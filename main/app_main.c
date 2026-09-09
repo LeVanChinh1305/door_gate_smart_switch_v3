@@ -92,73 +92,74 @@ void app_main(void) {
   ESP_LOGI(TAG, "Khởi tạo wifi STA thành công");
 
   // 5. Điều phối luồng khởi động dựa trên trạng thái thiết bị
-  device_mode_t eCurrentMode = get_current_door_mode();
-
-  switch (eCurrentMode) {
-  case DEVICE_MODE_UNCONNECTED:
-    ESP_LOGI(
-        TAG,"Thiết bị đang ở chế độ UNCONNECTED, kiểm tra NVS cấu hình Wi-Fi...");
-    if (!app_nvs_IsProvisionedWifiConfig()) {
-      ESP_LOGI(TAG,"Chưa có Wi-Fi trong NVS, đang chờ lệnh kết nối thủ công/ tự động");
-    } else {
-      ESP_LOGI(TAG,"Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái khóa tự động...");
-      set_current_door_mode(DEVICE_MODE_LOCKED);
-      app_led_state_SetState(E_LED_STATE_LOCKED);
-    }
-    break;
-
-  case DEVICE_MODE_CONNECT_AUTO:
-    ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối tự động (BluFi)...");
-    (void)app_blufi_Init();
-    break;
-
-  case DEVICE_MODE_CONNECT_MANUAL:
-    ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối thủ công (UDP)...");
-    // Triển khai logic lắng nghe cấu hình qua cổng UDP tại đây
-    break;
-
-  case DEVICE_MODE_NORMAL:
-    ESP_LOGI(TAG, "Thiết bị đang ở chế độ khóa tạm thời, chờ kết nối mạng...");
-    app_led_state_SetState(E_LED_STATE_LOCKED);
-    set_current_door_mode(DEVICE_MODE_LOCKED);
-    if (app_wifi_WaitForConnect(10000U)) {
-      ESP_LOGI(TAG, "Kết nối Wi-Fi thành công!");
-
-      // 6. Khởi động MQTT sau khi có Wi-Fi
-      (void)memset(&sNvsConfig, 0, sizeof(sNvsConfig));
-      eRet = app_nvs_LoadDeviceConfig(&sNvsConfig);
-      if (eRet == ESP_OK && sNvsConfig.broker[0] != '\0') {
-        (void)memset(&sDeviceConfig, 0, sizeof(sDeviceConfig));
-        // Ánh xạ từ NVS config sang app_nvs_device_config_t
-        (void)snprintf(sDeviceConfig.broker, sizeof(sDeviceConfig.broker), "%s", sNvsConfig.broker);
-        (void)snprintf(sDeviceConfig.username, sizeof(sDeviceConfig.username), "%s", sNvsConfig.username);
-        (void)snprintf(sDeviceConfig.password, sizeof(sDeviceConfig.password), "%s", sNvsConfig.password);
-        (void)snprintf(sDeviceConfig.mqtt_sub, sizeof(sDeviceConfig.mqtt_sub), "%s", sNvsConfig.mqtt_sub);
-        (void)snprintf(sDeviceConfig.mqtt_pub, sizeof(sDeviceConfig.mqtt_pub), "%s", sNvsConfig.mqtt_pub);
-        (void)snprintf(sDeviceConfig.mqtt_alert, sizeof(sDeviceConfig.mqtt_alert), "%s", sNvsConfig.mqtt_alert);
-        (void)snprintf(sDeviceConfig.api_secret_key, sizeof(sDeviceConfig.api_secret_key), "%s", sNvsConfig.api_secret_key);
-        (void)snprintf(sDeviceConfig.dev_ext_addr, sizeof(sDeviceConfig.dev_ext_addr), "%s", sNvsConfig.dev_ext_addr);
-        sDeviceConfig.dev_type = sNvsConfig.dev_type;
-
-        eRet = app_mqtt_StartInit(&sDeviceConfig);
-        if (eRet != ESP_OK) {
-          ESP_LOGE(TAG, "Khởi động MQTT thất bại: %s", esp_err_to_name(eRet));
-        } else {
-          ESP_LOGI(TAG, "MQTT đã khởi động thành công!");
-        }
+  if (app_device_state_HasMode(DEVICE_MODE_UNCONNECTED)) {
+      ESP_LOGI(TAG, "Thiết bị đang ở chế độ UNCONNECTED, kiểm tra NVS cấu hình Wi-Fi...");
+      if (!app_nvs_IsProvisionedWifiConfig()) {
+          ESP_LOGI(TAG, "Chưa có Wi-Fi trong NVS, đang chờ lệnh kết nối thủ công/ tự động");
       } else {
-        ESP_LOGW(TAG,"Không tìm thấy cấu hình MQTT trong NVS, bỏ qua khởi động MQTT.");
+          ESP_LOGI(TAG, "Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái kết nối tự động...");
+          
+          /* Cập nhật Bitmask: Tắt UNCONNECTED, Bật CONNECT_AUTO */
+          app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+          app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, true);
+          
+          app_led_state_SetState(E_LED_STATE_LOCKED);
       }
-    } else {
-      ESP_LOGW(TAG, "Timeout chờ kết nối Wi-Fi, tiếp tục chạy các task nền.");
-    }
-    break;
+  }
+  else if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
+      ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối tự động (BluFi)...");
+      (void)app_blufi_Init();
+  }
+  else if (app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
+      ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối thủ công (UDP)...");
+      // Triển khai logic lắng nghe cấu hình qua cổng UDP tại đây
+  }
+  else if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
+      ESP_LOGI(TAG, "Thiết bị đang ở chế độ hoạt động bình thường, kiểm tra kết nối mạng...");
+      app_led_state_SetState(E_LED_STATE_LOCKED);
+      
+      if (app_wifi_WaitForConnect(10000U)) {
+          ESP_LOGI(TAG, "Kết nối Wi-Fi thành công!");
 
-  default:
-    ESP_LOGW(TAG, "Trạng thái không xác định, đưa về UNCONNECTED");
-    set_current_door_mode(DEVICE_MODE_UNCONNECTED);
-    app_led_state_SetState(E_LED_STATE_NORMAL_IDLE);
-    break;
+          // Khởi động MQTT sau khi có Wi-Fi
+          (void)memset(&sNvsConfig, 0, sizeof(sNvsConfig));
+          eRet = app_nvs_LoadDeviceConfig(&sNvsConfig);
+          if (eRet == ESP_OK && sNvsConfig.broker[0] != '\0') {
+              (void)memset(&sDeviceConfig, 0, sizeof(sDeviceConfig));
+              // Ánh xạ từ NVS config sang app_nvs_device_config_t
+              (void)snprintf(sDeviceConfig.broker, sizeof(sDeviceConfig.broker), "%s", sNvsConfig.broker);
+              (void)snprintf(sDeviceConfig.username, sizeof(sDeviceConfig.username), "%s", sNvsConfig.username);
+              (void)snprintf(sDeviceConfig.password, sizeof(sDeviceConfig.password), "%s", sNvsConfig.password);
+              (void)snprintf(sDeviceConfig.mqtt_sub, sizeof(sDeviceConfig.mqtt_sub), "%s", sNvsConfig.mqtt_sub);
+              (void)snprintf(sDeviceConfig.mqtt_pub, sizeof(sDeviceConfig.mqtt_pub), "%s", sNvsConfig.mqtt_pub);
+              (void)snprintf(sDeviceConfig.mqtt_alert, sizeof(sDeviceConfig.mqtt_alert), "%s", sNvsConfig.mqtt_alert);
+              (void)snprintf(sDeviceConfig.api_secret_key, sizeof(sDeviceConfig.api_secret_key), "%s", sNvsConfig.api_secret_key);
+              (void)snprintf(sDeviceConfig.dev_ext_addr, sizeof(sDeviceConfig.dev_ext_addr), "%s", sNvsConfig.dev_ext_addr);
+              sDeviceConfig.dev_type = sNvsConfig.dev_type;
+
+              eRet = app_mqtt_StartInit(&sDeviceConfig);
+              if (eRet != ESP_OK) {
+                  ESP_LOGE(TAG, "Khởi động MQTT thất bại: %s", esp_err_to_name(eRet));
+              } else {
+                  ESP_LOGI(TAG, "MQTT đã khởi động thành công!");
+              }
+          } else {
+              ESP_LOGW(TAG, "Không tìm thấy cấu hình MQTT trong NVS, bỏ qua khởi động MQTT.");
+          }
+      } else {
+          ESP_LOGW(TAG, "Timeout chờ kết nối Wi-Fi, tiếp tục chạy các task nền.");
+      }
+  }
+  else {
+      ESP_LOGW(TAG, "Trạng thái không xác định, đặtt về UNCONNECTED");
+      
+      /* Reset Bitmask về duy nhất UNCONNECTED */
+      app_device_state_SetModeBit(DEVICE_MODE_NORMAL, false);
+      app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
+      app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
+      app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, true);
+      
+      app_led_state_SetState(E_LED_STATE_NORMAL_IDLE);
   }
 
   ESP_LOGI(TAG, "=== HỆ THỐNG ĐÃ KHỞI ĐỘNG HOÀN TẤT ===");

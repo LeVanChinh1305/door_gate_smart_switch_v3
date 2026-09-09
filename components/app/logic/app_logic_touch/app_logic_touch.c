@@ -88,7 +88,8 @@ static void app_logic_touch_Task(void *pArg)
                     } 
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
                         ESP_LOGI(TAG, ">>> Giữ 3-7s -> Xử lý kết nối tự động bằng blufi");
-                        set_current_door_mode(DEVICE_MODE_CONNECT_AUTO);
+                        app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+                        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, true);
                         app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
                         (void)app_blufi_Init();
                     } 

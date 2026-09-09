@@ -532,7 +532,13 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                   app_nvs_SaveDeviceConfig(&g_sCurrentDeviceConfig);
               if (eErr == ESP_OK) {
                 // Cập nhật lại trạng thái thiết bị sang Normal
-                set_current_door_mode(DEVICE_MODE_NORMAL);
+                /* Tắt các cờ trạng thái kết nối trung gian */
+                app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+                app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
+                app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
+
+                /* Bật cờ trạng thái hoạt động bình thường */
+                app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
                 app_led_state_SetState(E_LED_STATE_LOCKED);
                 // Khởi tạo MQTT luôn
                 //app_mqtt_StartInit(&g_sCurrentDeviceConfig);

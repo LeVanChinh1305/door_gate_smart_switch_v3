@@ -1,8 +1,3 @@
-/**
- * @file    device.c
- * @brief   Triển khai quản lý trạng thái thiết bị (device_mode_t, control_mode_t, v.v.)
- */
-
 #include "app_device_state.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -10,13 +5,11 @@
 
 static const char *TAG = "APP_DEVICE_STATE";
 
-// Khởi tạo các trạng thái mặc định ban đầu theo yêu cầu hệ thống
-static device_mode_t g_eCurrentDoorMode = DEVICE_MODE_UNCONNECTED;     
+static uint32_t g_u32CurrentDoorModeMask = (uint32_t)DEVICE_MODE_UNCONNECTED;     
 static control_mode_t g_eCurrentControlMode = CONTROL_MODE_ROLLING_NORMAL; 
 static sensor_type_t g_eCurrentSensorType = SENSOR_TYPE_NONE;         
 static sensor_wire_type_t g_eCurrentSensorWireType = SENSOR_WIRE_TYPE_NONE; 
 
-// Mutex bảo vệ biến trạng thái tránh xung đột dữ liệu giữa các Task
 static SemaphoreHandle_t g_hStateMutex = NULL;
 
 static void device_EnsureMutex(void)
@@ -26,31 +19,50 @@ static void device_EnsureMutex(void)
     }
 }
 
-// --- Quản lý Device Mode ---
-device_mode_t get_current_door_mode(void)
+uint32_t get_current_door_mode_mask(void)
 {
-    device_mode_t eMode = DEVICE_MODE_UNCONNECTED; 
+    uint32_t u32Mask = 0U;
     device_EnsureMutex();
     if (xSemaphoreTake(g_hStateMutex, pdMS_TO_TICKS(100)) == pdPASS) {
-        eMode = g_eCurrentDoorMode;
+        u32Mask = g_u32CurrentDoorModeMask;
         xSemaphoreGive(g_hStateMutex);
     }
-    return eMode;
+    return u32Mask;
 }
 
-void set_current_door_mode(device_mode_t mode) 
+bool app_device_state_HasMode(device_mode_t eMode)
+{
+    bool bHas = false;
+    device_EnsureMutex();
+    if (xSemaphoreTake(g_hStateMutex, pdMS_TO_TICKS(100)) == pdPASS) {
+        bHas = ((g_u32CurrentDoorModeMask & (uint32_t)eMode) != 0U);
+        xSemaphoreGive(g_hStateMutex);
+    }
+    return bHas;
+}
+
+void app_device_state_SetModeBit(device_mode_t eMode, bool bEnable)
 {
     device_EnsureMutex();
     if (xSemaphoreTake(g_hStateMutex, pdMS_TO_TICKS(100)) == pdPASS) {
-        if (g_eCurrentDoorMode != mode) {
-            ESP_LOGI(TAG, "Chuyển đổi Door Mode: %d -> %d", (int)g_eCurrentDoorMode, (int)mode);
-            g_eCurrentDoorMode = mode;
+        uint32_t u32OldMask = g_u32CurrentDoorModeMask;
+        
+        if (bEnable) {
+            g_u32CurrentDoorModeMask |= (uint32_t)eMode;
+        } else {
+            g_u32CurrentDoorModeMask &= ~((uint32_t)eMode);
+        }
+
+        if (u32OldMask != g_u32CurrentDoorModeMask) {
+            ESP_LOGI(TAG, "Cập nhật Bitmask Mode: 0x%03X -> 0x%03X", 
+                     (unsigned int)u32OldMask, (unsigned int)g_u32CurrentDoorModeMask);
         }
         xSemaphoreGive(g_hStateMutex);
     }
 }
 
-// --- Quản lý Control Mode ---
+
+
 control_mode_t get_current_control_mode(void) 
 {
     control_mode_t eMode = CONTROL_MODE_ROLLING_NORMAL; 
@@ -71,7 +83,6 @@ void set_current_control_mode(control_mode_t mode)
     }
 }
 
-// --- Quản lý Sensor Type ---
 sensor_type_t get_current_sensor_type(void) 
 {
     sensor_type_t eType = SENSOR_TYPE_NONE; 
@@ -92,13 +103,13 @@ void set_current_sensor_type(sensor_type_t type)
     }
 }
 
-// --- Quản lý Sensor Wire Type ---
 sensor_wire_type_t get_current_sensor_wire_type(void) 
 {
     sensor_wire_type_t eWireType = SENSOR_WIRE_TYPE_NONE; 
     device_EnsureMutex();
     if (xSemaphoreTake(g_hStateMutex, pdMS_TO_TICKS(100)) == pdPASS) {
         eWireType = g_eCurrentSensorWireType;
+        xSemaphoreGive(g_hStateMutex);
     }
     return eWireType;
 }

@@ -190,7 +190,11 @@ esp_err_t app_wifi_InitSta(void)
 
     } else if (eRet == ESP_ERR_NVS_NOT_FOUND) {
         ESP_LOGI(TAG, "NVS không chứa cấu hình wifi, chuyển sang chế độ chờ kết nối");
-        set_current_door_mode(DEVICE_MODE_UNCONNECTED);
+        app_device_state_SetModeBit(DEVICE_MODE_NORMAL, false);
+        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
+        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
+
+        app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, true);
     } else {
         ESP_LOGE(TAG, "Tải cấu hình WiFi thất bại: %s", esp_err_to_name(eRet));
         return eRet;
