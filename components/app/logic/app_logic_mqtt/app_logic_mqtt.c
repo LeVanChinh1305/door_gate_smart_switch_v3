@@ -367,10 +367,10 @@ static void app_logic_mqtt_HandleDeleteSchedule(const cJSON *jsRoot)
         /* Mẹo: Dù NVS báo không tìm thấy lịch cũ (ESP_ERR_NOT_FOUND), 
            chúng ta vẫn phản hồi mã thành công 50000 để App gỡ giao diện chờ. */
         if (eErr == ESP_OK || eErr == ESP_ERR_NOT_FOUND) {
-            (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdDeleteSchedule", (uint32_t)iId, 50000);
+            (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdDeleteSchedule", (int32_t)iId, 50000);
             ESP_LOGI(TAG, "Đã gửi bản tin phản hồi xóa lịch (50000) thành công");
         } else {
-            (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdDeleteSchedule", (uint32_t)iId, 50005);
+            (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdDeleteSchedule", (int32_t)iId, 50005);
         }
     }
 }

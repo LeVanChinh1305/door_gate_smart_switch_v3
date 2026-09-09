@@ -40,7 +40,7 @@ esp_err_t app_logic_mqtt_publisher_ReportDeviceInfo(void);
 /**
  * @brief Gửi phản hồi kết quả Thêm/Xóa lịch hẹn giờ
  */
-esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, uint32_t u32Id, int iErrorCode);
+esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, int32_t i32Id, int iErrorCode);
 
 #ifdef __cplusplus
 }
