@@ -109,11 +109,13 @@ static void app_logic_relay_TrackingTask(void *arg) {
                 app_logic_relay_Stop(); 
                 g_i8Direction = 0;       
                 g_u8TargetLevel = g_u8CurrentLevel; /* Ép đồng bộ chốt chặn */
-                app_logic_sensor_history_item_t sSensorLog;
-                sSensorLog.i64Time = 0; // hàm report tự động gán rồi
-                sSensorLog.u8SensorState = (g_u8CurrentLevel == 100U) ? 1U : 0U; // 1 mở / 0 đóng
-                (void) app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1); 
-
+                if((g_u8CurrentLevel == 0U) || (g_u8CurrentLevel == 100U)){
+                    app_logic_sensor_history_item_t sSensorLog;
+                    sSensorLog.i64Time = 0; // hàm report tự động gán rồi
+                    sSensorLog.u8SensorState = (g_u8CurrentLevel == 100U) ? 1U : 0U; // 1 mở / 0 đóng
+                    (void) app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1); 
+                }
+                app_logic_relay_UpdateAppUI();
             }
 
             /* 3. Gọi hàm xử lý logic App và xuất báo cáo MQTT (Chỉ cần 1 dòng duy nhất) */
