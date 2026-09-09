@@ -21,6 +21,7 @@
 #include "app_logic_mqtt_publisher.h" 
 #include "app_logic_extra_config.h"
 #include <time.h>
+#include "app_logic_telemetry.h"
 #include "app_nvs.h"
 
 static const char *TAG = "APP_LOGIC_MQTT";
