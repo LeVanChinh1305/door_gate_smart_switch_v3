@@ -15,6 +15,10 @@
 #include "app_led_state.h"
 #include "app_device_state.h"
 #include "app_blufi.h"
+#include "app_logic_telemetry.h"
+#include "app_nvs.h"
+#include "app_logic_mqtt_publisher.h"
+#include "app_mqtt.h"
 
 static const char *TAG = "APP_LOGIC_TOUCH";
 
@@ -89,19 +93,39 @@ static void app_logic_touch_Task(void *pArg)
                         (void)app_blufi_Init();
                     } 
                     else {
+                        const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+                        app_logic_control_history_item_t sLog;
+                        (void)memset(&sLog, 0, sizeof(app_logic_control_history_item_t));
                         /* Nhấn nhả bình thường (Short Press) -> Gọi Relay */
                         if ((u8PressedBtn & DF_TOUCH_BTN_CS5) != 0U) {
                             ESP_LOGI(TAG, "→ Lệnh: MỞ (CS5)");
                             app_logic_relay_Open();
                             (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
+                            if (psConfig != NULL) {
+                                app_logic_telemetry_BuildControlItem(&sLog, "gate_3", E_TELEMETRY_MODE_OPEN, E_TELEMETRY_SRC_PHYSICAL_DEVICE, psConfig->dev_ext_addr, "");
+                                (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
+                            }
                         } else if ((u8PressedBtn & DF_TOUCH_BTN_CS6) != 0U) {
                             ESP_LOGI(TAG, "→ Lệnh: DỪNG (CS6)");
                             app_logic_relay_Stop();
                             (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
+                            if (psConfig != NULL) {
+                                uint8_t u8StopLevel = app_logic_relay_GetCurrentLevel();
+                                app_logic_telemetry_BuildControlItem(&sLog, "gate_2", E_TELEMETRY_MODE_STOP, E_TELEMETRY_SRC_PHYSICAL_DEVICE, psConfig->dev_ext_addr, "");
+                                sLog.i32Value = (int32_t)u8StopLevel;
+                                (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
+
+                                /* Cập nhật UI thanh trượt trên App về mốc dừng thực tế */
+                                // (void)app_logic_mqtt_publisher_ReportGateData(0, 1, 0, u8StopLevel);
+                            }
                         } else if ((u8PressedBtn & DF_TOUCH_BTN_CS7) != 0U) {
                             ESP_LOGI(TAG, "→ Lệnh: ĐÓNG (CS7)");
                             app_logic_relay_Close();
                             (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
+                            if (psConfig != NULL) {
+                                app_logic_telemetry_BuildControlItem(&sLog, "gate_1", E_TELEMETRY_MODE_CLOSE, E_TELEMETRY_SRC_PHYSICAL_DEVICE, psConfig->dev_ext_addr, "");
+                                (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
+                            }
                         } else {
                             ESP_LOGW(TAG, "Nhấn nhả nút không xác định: 0x%02X", u8PressedBtn);
                         }
