@@ -83,6 +83,7 @@ void app_logic_relay_UpdateAppUI(void) {
  */
 
 static void app_logic_relay_TrackingTask(void *arg) {
+    uint8_t u8LastReportLevel = 255U; 
     while (1) {
         if (g_i8Direction != 0) {
             uint32_t u32TimePerOnePercentMs = g_sExtraConfig.sgmCycle * 10U; 
@@ -116,7 +117,14 @@ static void app_logic_relay_TrackingTask(void *arg) {
             }
 
             /* 3. Gọi hàm xử lý logic App và xuất báo cáo MQTT (Chỉ cần 1 dòng duy nhất) */
-            app_logic_relay_UpdateAppUI();
+            if ((abs((int)g_u8CurrentLevel - (int)u8LastReportLevel) >= 5) || 
+                (g_u8CurrentLevel == g_u8TargetLevel) || 
+                (g_u8CurrentLevel == 0U) || 
+                (g_u8CurrentLevel == 100U)) 
+            {
+                u8LastReportLevel = g_u8CurrentLevel;
+                app_logic_relay_UpdateAppUI();
+            }
         } else {
             vTaskDelay(pdMS_TO_TICKS(100U));
         }
