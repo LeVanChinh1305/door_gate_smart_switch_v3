@@ -15,13 +15,13 @@
 static const char *TAG = "APP_LOGIC_TELEMETRY";
 
 /**
- * @brief Lấy Unix Timestamp hiện tại bằng mili-giây (ms)
+ * @brief Lấy Unix Timestamp hiện tại bằng giây
  */
 static int64_t get_current_timestamp_ms(void)
 {
     time_t tNow = 0;
     (void)time(&tNow);
-    return (int64_t)tNow * 1000LL;
+    return (int64_t)tNow;
 }
 
 /**
@@ -112,6 +112,7 @@ esp_err_t app_logic_telemetry_ReportControlHistory(const app_logic_control_histo
             if (pItem != NULL) {
                 (void)cJSON_AddStringToObject(pItem, "control", pHistoryList[i].cControl);
                 (void)cJSON_AddNumberToObject(pItem, "mode", (double)pHistoryList[i].i32Mode);
+                (void)cJSON_AddNumberToObject(pItem, "value", (double)pHistoryList[i].i32Value);
                 (void)cJSON_AddNumberToObject(pItem, "time", (double)pHistoryList[i].i64Time);
                 (void)cJSON_AddNumberToObject(pItem, "src", (double)pHistoryList[i].i32Src);
                 (void)cJSON_AddStringToObject(pItem, "srcId", pHistoryList[i].cSrcId);
@@ -129,10 +130,12 @@ esp_err_t app_logic_telemetry_ReportControlHistory(const app_logic_control_histo
         ESP_LOGE(TAG, "Tạo JSON ReportControlHistory thất bại");
         return ESP_FAIL;
     }
+    char acTopic[256];
+    (void)snprintf(acTopic, sizeof(acTopic), "%s/ControlLog", pDevCfg->mqtt_alert);
 
-    int i32MsgId = esp_mqtt_client_publish(xMqttClient, pDevCfg->mqtt_alert, pJsonOut, 0, 1, 0);
+    int i32MsgId = esp_mqtt_client_publish(xMqttClient, acTopic, pJsonOut, 0, 1, 0);
     if (i32MsgId >= 0) {
-        ESP_LOGI(TAG, "Đã gửi ReportControlHistory (msg_id=%d): %s", i32MsgId, pJsonOut);
+        ESP_LOGI(TAG, "Đã gửi ReportControlHistory (msg_id=%d) lên topic [%s]: %s", i32MsgId, pJsonOut, acTopic);
     } else {
         ESP_LOGE(TAG, "Gửi ReportControlHistory thất bại (msg_id=%d)", i32MsgId);
     }

@@ -50,6 +50,7 @@ typedef enum {
 typedef struct {
     char cControl[DF_LOGIC_TELEMETRY_MAX_STR_LEN]; /* "gate_1", "gate_2", "gate_3" */
     int32_t i32Mode;                                /* Dùng enum e_telemetry_control_mode_t */
+    int32_t i32Value;
     int64_t i64Time;                                /* Timestamp (ms) */
     int32_t i32Src;                                 /* Dùng enum e_telemetry_control_src_t */
     char cSrcId[DF_LOGIC_TELEMETRY_MAX_STR_LEN];   /* ID nguồn (SessionID, RuleID, DeviceID...) */

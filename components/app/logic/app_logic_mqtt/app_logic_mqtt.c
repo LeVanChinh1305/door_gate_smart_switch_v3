@@ -31,12 +31,33 @@ static QueueHandle_t g_xMqttQueue = NULL;
 
 /**
  * @brief   Giải mã và xử lý bản tin CmdSetData có chứa trường mã hóa devVEncrypt.
- * @param   pValue Con trỏ cJSON trỏ tới đối tượng "value" trong gói tin JSON.
+ * @param   jsRoot
  */
-static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
+static void app_logic_mqtt_HandleSetData(const cJSON *jsRoot)
 {
-    if (pValue == NULL) {
+    if (jsRoot == NULL) {
         return;
+    }
+
+    const cJSON *pValue = cJSON_GetObjectItem(jsRoot, "value");
+
+    if (pValue == NULL) {
+        pValue = jsRoot;
+    }
+    /* 2. lấy srcId trực tiếp từ value */
+    char acSrcId[64] = "0";
+    const cJSON *jsSrcId = cJSON_GetObjectItem(pValue, "srcId");
+    if ((jsSrcId == NULL) && (jsRoot != NULL)) {
+        jsSrcId = cJSON_GetObjectItem(jsRoot, "srcId");
+    }
+
+    // 3. lấy mảng mã hóa 
+    if (jsSrcId != NULL) {
+        if (cJSON_IsString(jsSrcId) && (jsSrcId->valuestring != NULL)) {
+            (void)snprintf(acSrcId, sizeof(acSrcId), "%s", jsSrcId->valuestring);
+        } else if (cJSON_IsNumber(jsSrcId)) {
+            (void)snprintf(acSrcId, sizeof(acSrcId), "%lld", (long long)jsSrcId->valueint);
+        }
     }
 
     const cJSON *jsEncryptArray = cJSON_GetObjectItem(pValue, "devVEncrypt");
@@ -94,12 +115,20 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
 
                 ESP_LOGI(TAG, "Điều khiển thiết bị - Param: %s, Value: %d", pcParam, iValue);
 
+                //khai báo biến sLog cho gửi cloud
+                app_logic_control_history_item_t sLog;
+                (void)memset(&sLog, 0, sizeof(app_logic_control_history_item_t));
+
                 /* Ánh xạ tham số từ app/cloud xuống lệnh điều khiển relay thực tế */
                 if (strcmp(pcParam, "gate_3") == 0 || strcmp(pcParam, "up") == 0) {
                     if (iValue == 1) {
                         (void)app_logic_relay_Open();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Mở cửa (UP)");
                         (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
+                        // gửi lại lệnh lịch sử điều khiển 
+                        app_logic_telemetry_BuildControlItem(&sLog, "gate_3", E_TELEMETRY_MODE_OPEN, E_TELEMETRY_SRC_APP, acSrcId, psConfig->dev_ext_addr);
+                        // đóng gói cái trên thành sLog để dưới gửi 
+                        (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
                     }
                 } 
                 else if (strcmp(pcParam, "gate_1") == 0 || strcmp(pcParam, "down") == 0) {
@@ -107,6 +136,8 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
                         (void)app_logic_relay_Close();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Đóng cửa (DOWN)");
                         (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
+                        app_logic_telemetry_BuildControlItem(&sLog, "gate_1", E_TELEMETRY_MODE_CLOSE, E_TELEMETRY_SRC_APP, acSrcId, psConfig->dev_ext_addr);
+                        (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
                     }
                 } 
                 else if (strcmp(pcParam, "gate_2") == 0 || strcmp(pcParam, "stop") == 0) {
@@ -114,6 +145,8 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
                         (void)app_logic_relay_Stop();
                         ESP_LOGI(TAG, "-> Thực thi lệnh: Dừng cửa (STOP)");
                         (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
+                        app_logic_telemetry_BuildControlItem(&sLog, "gate_2", E_TELEMETRY_MODE_STOP, E_TELEMETRY_SRC_APP, acSrcId, psConfig->dev_ext_addr);
+                        (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
                     }
                 } 
                 else if (strcmp(pcParam, "gate_level") == 0) {
@@ -132,6 +165,9 @@ static void app_logic_mqtt_HandleSetData(const cJSON *pValue)
                         }
 
                         app_logic_relay_SetLevel(u8TargetVal);
+                        app_logic_telemetry_BuildControlItem(&sLog, "open_level", E_TELEMETRY_MODE_PERCENT, E_TELEMETRY_SRC_APP, acSrcId, psConfig->dev_ext_addr);
+                        sLog.i32Value = (int32_t)u8TargetVal;
+                        (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
                     } else {
                         ESP_LOGW(TAG, "Giá trị gate_level không hợp lệ: %d", iValue);
                     }
@@ -464,7 +500,7 @@ static void app_logic_mqtt_Task(void *pArg)
                             ESP_LOGI(TAG, "-> khớp lệnh CmdGetSensorConfig");
                         }else if (strcmp(pcCmdName, "CmdSetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdSetData, tiến hành gọi hàm giải mã...");
-                            app_logic_mqtt_HandleSetData(jsValue);
+                            app_logic_mqtt_HandleSetData(jsRoot);
                         }else if (strcmp(pcCmdName, "CmdAddSchedule") == 0 || strcmp(pcCmdName, "CmdUpdateSchedule") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh %s, đang giải mã...", pcCmdName);
                             /* Truyền địa chỉ của jsRoot để hàm con có thể xóa và gán NULL */
