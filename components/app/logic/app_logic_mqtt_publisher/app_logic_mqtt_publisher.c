@@ -17,7 +17,7 @@ esp_err_t app_logic_mqtt_publisher_SendResponse(const char *pcPayload)
     }
 
     /* 1. Lấy con trỏ client quản lý kết nối MQTT */
-    esp_mqtt_client_handle_t xClient = mqtt_app_GetClient();
+    esp_mqtt_client_handle_t xClient = app_mqtt_GetClient();
     if (xClient == NULL) {
         ESP_LOGE(TAG, "Lỗi: MQTT Client chưa được khởi tạo hoặc mất kết nối");
         return ESP_FAIL;
@@ -28,7 +28,7 @@ esp_err_t app_logic_mqtt_publisher_SendResponse(const char *pcPayload)
     }
 
     /* 2. Lấy cấu hình thiết bị để trích xuất Topic Publish */
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
         ESP_LOGE(TAG, "Lỗi: Topic Publish (mqtt_pub) chưa được cấu hình trong NVS");
         return ESP_FAIL;
@@ -46,7 +46,7 @@ esp_err_t app_logic_mqtt_publisher_SendResponse(const char *pcPayload)
 }
 
 esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gate2, uint8_t u8Gate3, uint8_t u8CurrentLevel){
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
         return ESP_FAIL;
     }
@@ -112,7 +112,7 @@ esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gat
 
 esp_err_t app_logic_mqtt_publisher_ReportWifiInfo(void)
 {
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
         return ESP_FAIL;
     }
@@ -171,7 +171,7 @@ esp_err_t app_logic_mqtt_publisher_ReportWifiInfo(void)
 
 esp_err_t app_logic_mqtt_publisher_ReportDeviceInfo(void)
 {
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
         return ESP_FAIL;
     }
@@ -203,9 +203,9 @@ esp_err_t app_logic_mqtt_publisher_ReportDeviceInfo(void)
 }
 
 
-esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, uint32_t u32Id, int iErrorCode)
+esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, int32_t i32Id, int iErrorCode)
 {
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
         return ESP_FAIL;
     }

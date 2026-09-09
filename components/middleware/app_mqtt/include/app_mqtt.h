@@ -21,13 +21,13 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig);
  * @brief   Lấy con trỏ quản lý client MQTT hiện tại.
  * @return  esp_mqtt_client_handle_t Con trỏ đến handle của MQTT client.
  */
-esp_mqtt_client_handle_t mqtt_app_GetClient(void);
+esp_mqtt_client_handle_t app_mqtt_GetClient(void);
 
 /**
  * @brief   Lấy thông tin cấu hình thiết bị đang được MQTT module lưu trữ.
  * @return  const device_config_t* Con trỏ hằng trỏ tới cấu trúc cấu hình thiết bị.
  */
-const app_nvs_device_config_t *mqtt_app_GetDeviceConfig(void);
+const app_nvs_device_config_t *app_mqtt_GetDeviceConfig(void);
 
 /**
  * @brief   Kiểm tra trạng thái kết nối mạng MQTT hiện tại.

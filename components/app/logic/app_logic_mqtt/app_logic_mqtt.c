@@ -82,7 +82,7 @@ static void app_logic_mqtt_HandleSetData(const cJSON *jsRoot)
     }
 
     /* 2. Lấy cấu hình thiết bị để trích xuất khóa bí mật api_secret_key */
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || strlen(psConfig->api_secret_key) < 32U) {
         ESP_LOGE(TAG, "API Secret Key không hợp lệ hoặc chưa được cấu hình trong NVS");
         return;
@@ -230,7 +230,7 @@ static void app_logic_mqtt_HandleAddAndUpdateSchedule(cJSON **ppjsRoot, const ch
     }
 
     /* 3. Lấy API Secret Key để giải mã */
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || strlen(psConfig->api_secret_key) < 32U) {
         ESP_LOGE(TAG, "Lỗi API Secret Key không hợp lệ");
         return;
@@ -380,7 +380,7 @@ static void app_logic_mqtt_HandleDeleteSchedule(const cJSON *jsRoot)
  */
 static void app_logic_mqtt_HandleDeleteEndpointConfig(const char *pcCmdName)
 {
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL) return;
 
     struct timeval tv;
@@ -412,7 +412,7 @@ static void app_logic_mqtt_HandleDeleteEndpointConfig(const char *pcCmdName)
 static void app_logic_mqtt_HandleDeleteDevice(const char *pcCmdName)
 {
     /* 1. Lấy thông tin thiết bị từ RAM/NVS để phản hồi */
-    const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL) return;
 
     /* 2. Đóng gói JSON phản hồi rút gọn theo Spec */

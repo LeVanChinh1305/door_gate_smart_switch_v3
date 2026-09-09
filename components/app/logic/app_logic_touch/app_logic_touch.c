@@ -93,7 +93,7 @@ static void app_logic_touch_Task(void *pArg)
                         (void)app_blufi_Init();
                     } 
                     else {
-                        const app_nvs_device_config_t *psConfig = mqtt_app_GetDeviceConfig();
+                        const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
                         app_logic_control_history_item_t sLog;
                         (void)memset(&sLog, 0, sizeof(app_logic_control_history_item_t));
                         /* Nhấn nhả bình thường (Short Press) -> Gọi Relay */

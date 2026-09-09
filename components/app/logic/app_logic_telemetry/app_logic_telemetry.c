@@ -53,7 +53,7 @@ void app_logic_telemetry_BuildControlItem(app_logic_control_history_item_t *pOut
     if ((pcRawSrcId != NULL) && (strlen(pcRawSrcId) > 0U)) {
         (void)snprintf(pOutItem->cSrcId, sizeof(pOutItem->cSrcId), "%s", pcRawSrcId);
     } else {
-        const app_nvs_device_config_t *pDevCfg = mqtt_app_GetDeviceConfig();
+        const app_nvs_device_config_t *pDevCfg = app_mqtt_GetDeviceConfig();
         (void)snprintf(pOutItem->cSrcId, sizeof(pOutItem->cSrcId), "%s", (pDevCfg != NULL) ? pDevCfg->dev_ext_addr : "");
     }
 
@@ -87,8 +87,8 @@ esp_err_t app_logic_telemetry_ReportControlHistory(const app_logic_control_histo
         return ESP_ERR_INVALID_ARG;
     }
 
-    const app_nvs_device_config_t *pDevCfg = mqtt_app_GetDeviceConfig();
-    esp_mqtt_client_handle_t xMqttClient = mqtt_app_GetClient();
+    const app_nvs_device_config_t *pDevCfg = app_mqtt_GetDeviceConfig();
+    esp_mqtt_client_handle_t xMqttClient = app_mqtt_GetClient();
 
     if ((xMqttClient == NULL) || !app_mqtt_IsConnected()) {
         ESP_LOGE(TAG, "MQTT chưa kết nối, hủy gửi ReportControlHistory");
@@ -150,8 +150,8 @@ esp_err_t app_logic_telemetry_ReportSensorHistory(const app_logic_sensor_history
         return ESP_ERR_INVALID_ARG;
     }
 
-    const app_nvs_device_config_t *pDevCfg = mqtt_app_GetDeviceConfig();
-    esp_mqtt_client_handle_t xMqttClient = mqtt_app_GetClient();
+    const app_nvs_device_config_t *pDevCfg = app_mqtt_GetDeviceConfig();
+    esp_mqtt_client_handle_t xMqttClient = app_mqtt_GetClient();
 
     if ((xMqttClient == NULL) || !app_mqtt_IsConnected()) {
         ESP_LOGE(TAG, "MQTT chưa kết nối, hủy gửi ReportSensorHistory");
