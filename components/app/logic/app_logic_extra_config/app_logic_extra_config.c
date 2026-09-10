@@ -13,6 +13,48 @@
 static const char *TAG = "APP_LOGIC_EXTRA_CFG";
 /* Biến Timer tĩnh quản lý lịch bật/tắt Khóa RF */
 static TimerHandle_t g_hLockRFTimer = NULL;
+// biến quản lý khóa tạm thời 
+static TimerHandle_t g_hAntiAnimalTimer = NULL;
+
+/**
+ * @brief Callback hết thời gian mở cửa sổ thao tác -> TỰ ĐỘNG KHÓA LẠI
+ */
+static void anti_animal_timer_callback(TimerHandle_t xTimer)
+{
+    ESP_LOGI(TAG, "==> Hết thời gian cho phép thao tác! TỰ ĐỘNG KHÓA NÚT CẢM ỨNG.");
+    /* Dựng lại cờ KHÓA TẠM THỜI */
+    app_device_state_SetModeBit(DEVICE_MODE_LOCKED_TEMP, true);
+}
+
+/**
+ * @brief Tạm thời mở khóa nút cảm ứng và đếm ngược N giây để khóa lại
+ */
+void app_logic_extra_config_StartAntiAnimalWindow(void)
+{
+    /* Nếu tính năng TẮT -> Tắt bitmask khóa và dừng Timer */
+    if (g_sExtraConfig.anti_animal_enb == 0 || g_sExtraConfig.anti_animal_lock_time == 0) {
+        app_device_state_SetModeBit(DEVICE_MODE_LOCKED_TEMP, false);
+        if (g_hAntiAnimalTimer != NULL) {
+            xTimerStop(g_hAntiAnimalTimer, 0);
+        }
+        return;
+    }
+
+    /* 1. TẠM THỜI MỞ KHÓA NÚT CẢM ỨNG */
+    app_device_state_SetModeBit(DEVICE_MODE_LOCKED_TEMP, false);
+    ESP_LOGI(TAG, "Mở khóa nút cảm ứng! Cho phép thao tác trong %lu giây...", (unsigned long)g_sExtraConfig.anti_animal_lock_time);
+
+    /* 2. ĐẶT LỊCH KHÓA LẠI SAU N GIÂY */
+    uint32_t u32TimeoutMs = g_sExtraConfig.anti_animal_lock_time * 1000U;
+
+    if (g_hAntiAnimalTimer == NULL) {
+        g_hAntiAnimalTimer = xTimerCreate("anti_anim_tmr", pdMS_TO_TICKS(u32TimeoutMs), pdFALSE, NULL, anti_animal_timer_callback);
+    } else {
+        xTimerChangePeriod(g_hAntiAnimalTimer, pdMS_TO_TICKS(u32TimeoutMs), 0);
+    }
+    xTimerStart(g_hAntiAnimalTimer, 0);
+}
+
 
 /**
  * @brief Callback xử lý khi Timer đếm ngược hết giờ
@@ -228,6 +270,16 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
 
         /* 2. Tính toán lại thời gian chờ cho Timer theo cấu hình mới */
         app_logic_extra_config_ScheduleNextRFLock();
+    }
+
+    if (g_sExtraConfig.anti_animal_enb == 1) {
+        /* Khóa ngay lập tức nếu vừa bật tính năng */
+        app_device_state_SetModeBit(DEVICE_MODE_LOCKED_TEMP, true);
+    }else {
+        app_device_state_SetModeBit(DEVICE_MODE_LOCKED_TEMP, false);
+            if (g_hAntiAnimalTimer != NULL) {
+            xTimerStop(g_hAntiAnimalTimer, 0);
+        }
     }
 
     /* Lưu vào NVS nếu có bất kỳ biến nào bị thay đổi so với cấu hình hiện tại */

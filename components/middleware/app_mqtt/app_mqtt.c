@@ -182,3 +182,28 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
 bool app_mqtt_IsConnected(void) { 
     return g_bIsConnected; 
 }
+
+
+/**
+ * @brief   Dừng và giải phóng tài nguyên MQTT Client cùng TLS Buffer về cho Heap.
+ * @return  ESP_OK nếu xử lý thành công.
+ */
+esp_err_t app_mqtt_Stop(void)
+{
+    if (g_xMqttClient != NULL) {
+        ESP_LOGI(TAG, "Đang dừng MQTT Client để giải phóng RAM cho chế độ kết nối...");
+        
+        /* 1. Dừng Task Client và đóng Socket TLS */
+        (void)esp_mqtt_client_stop(g_xMqttClient);
+        
+        /* 2. Hủy Handle và giải phóng Dynamic Heap Memory */
+        (void)esp_mqtt_client_destroy(g_xMqttClient);
+        
+        /* 3. Reset con trỏ và cờ trạng thái */
+        g_xMqttClient = NULL;
+        g_bIsConnected = false;
+        
+        ESP_LOGI(TAG, "Đã hủy MQTT Client và thu hồi RAM thành công!");
+    }
+    return ESP_OK;
+}

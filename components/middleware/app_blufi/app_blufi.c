@@ -40,6 +40,8 @@ static app_nvs_device_config_t g_sCurrentDeviceConfig = {0};
 
 static const char *TAG = "APP_BLUFI";
 
+static bool s_bClassicBtMemReleased = false;
+
 // // Tham số cấu hình quảng bá BLE
 static esp_ble_adv_params_t blufi_adv_params = {
     .adv_int_min = 0x20, // 20ms
@@ -595,7 +597,13 @@ esp_err_t app_blufi_Init(void) {
   app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
 
   // Giải phóng bộ nhớ Classic BT, chỉ giữ BLE
-  ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+  if (!s_bClassicBtMemReleased) {
+    esp_err_t eReleaseErr = esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);
+    if (eReleaseErr == ESP_OK) {
+        s_bClassicBtMemReleased = true;
+        ESP_LOGI(TAG, "Đã thu hồi RAM từ Classic BT thành công!");
+    }
+  }
 
   // Tạo cấu hình mặc định cho BT Controller thông qua macro
   esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
@@ -701,10 +709,10 @@ esp_err_t app_blufi_Deinit(void) {
   esp_bluedroid_deinit();
   esp_bt_controller_disable();
   esp_bt_controller_deinit();
-  esp_err_t eMemRet = esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
-  if (eMemRet == ESP_OK) {
-      ESP_LOGI(TAG, "=> Đã thu hồi thành công ~50KB RAM từ Bluetooth!");
-  }
+  // esp_err_t eMemRet = esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
+  // if (eMemRet == ESP_OK) {
+  //     ESP_LOGI(TAG, "=> Đã thu hồi thành công ~50KB RAM từ Bluetooth!");
+  // }
 
   ESP_LOGI(TAG, "Hủy khởi tạo BLUFI thành công");
 

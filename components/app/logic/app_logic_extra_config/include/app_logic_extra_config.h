@@ -37,8 +37,16 @@ bool app_logic_extra_config_IsRFLocked(void);
 
 /**
  * @brief Lập lịch Dynamic Timer tự động thức dậy đúng mốc lockRFBegin/lockRFEnd tiếp theo.
+ * @note trong chế độ loại bỏ điều khiển ngoài ý muốn
  */
 void app_logic_extra_config_ScheduleNextRFLock(void);
+
+
+/**
+ * @brief Tạm thời tháo cờ khóa cảm ứng (anti_animal) và đặt lịch đếm ngược N giây để khóa lại.
+ * @note trong chế độ khóa an toàn 
+ */
+void app_logic_extra_config_StartAntiAnimalWindow(void);
 
 #ifdef __cplusplus
 }

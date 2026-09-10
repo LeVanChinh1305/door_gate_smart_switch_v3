@@ -307,8 +307,8 @@ static void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config) {
   config->switch_2_lightness = 100;
   config->switch_3_lightness = 100;
 
-  config->anti_animal_enb = 1;
-  config->anti_animal_lock_time = 60;
+  config->anti_animal_enb = 0;
+  config->anti_animal_lock_time = 5;
   config->gate_countdown = 200;
   config->sgmCycle = 60;
   config->sgmCycleGap = 6;
@@ -316,7 +316,7 @@ static void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config) {
   
   config->resetMode = 1;
   config->wlanMode = 0;
-  config->lockRFEnb = 1;
+  config->lockRFEnb = 0;
   config->lockRFBegin = 1638928504;
   config->lockRFEnd = 1638928504;
 }

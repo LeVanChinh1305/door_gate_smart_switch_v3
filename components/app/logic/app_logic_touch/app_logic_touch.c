@@ -19,6 +19,8 @@
 #include "app_nvs.h"
 #include "app_logic_mqtt_publisher.h"
 #include "app_mqtt.h"
+#include "app_logic_extra_config.h"
+
 
 static const char *TAG = "APP_LOGIC_TOUCH";
 
@@ -84,17 +86,52 @@ static void app_logic_touch_Task(void *pArg)
                     if (u32HeldMs >= DF_TOUCH_HOLD_7S_MS) {
                         ESP_LOGI(TAG, ">>> Giữ > 7s -> Xử lý kết nối thủ công");
                         /* TODO: Gọi hàm Config Manual */
+                        app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+                        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, true);
 
                     } 
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
-                        ESP_LOGI(TAG, ">>> Giữ 3-7s -> Xử lý kết nối tự động bằng blufi");
-                        app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
-                        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, true);
-                        app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
-                        (void)app_blufi_Init();
+                        // th1: giữ đồng thời 2 nút đóng + mở 
+                        if ((u8PressedBtn & (DF_TOUCH_BTN_CS5 | DF_TOUCH_BTN_CS7)) == (DF_TOUCH_BTN_CS5 | DF_TOUCH_BTN_CS7)) {
+                            ESP_LOGI(TAG, ">>> Phát hiện giữ 2 nút Đóng/Mở 3s -> MỞ KHÓA TẠM THỜI!");
+                            
+                            /* Mở khóa và bắt đầu đếm ngược N giây để khóa lại */
+                            app_logic_extra_config_StartAntiAnimalWindow();
+                            // app_logic_buzzer_Beep(200);
+                        }
+
+                        // th2: giữ 1 nút đơn 3 giây
+                        else{
+                            ESP_LOGI(TAG, ">>> Giữ 3-7s -> Xử lý kết nối tự động bằng blufi");
+                            app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+                            app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, true);
+                            app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
+                        }
                     } 
                     else {
-                        if (app_device_state_HasMode(DEVICE_MODE_LOCKED_RF)) {
+                        if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO) || 
+                            app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
+                            
+                            ESP_LOGW(TAG, "Đang trong chế độ kết nối, nhận nút bấm (0x%02X) -> HỦY KẾT NỐI", u8PressedBtn);
+                            
+                            /* Tắt các bitmask chế độ kết nối */
+                            app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
+                            app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
+
+                            /* Khôi phục trạng thái trước đó dựa vào việc NVS đã có Wi-Fi hay chưa */
+                            if (app_nvs_IsProvisionedWifiConfig()) {
+                                app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
+                                /* Đổi LED về trạng thái bình thường */
+                                app_led_state_SetState(E_LED_STATE_NORMAL);
+                            } else {
+                                app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, true);
+                                app_led_state_SetState(E_LED_STATE_NORMAL_IDLE);
+                            }
+
+                            u8PrevStatus = u8CurrentStatus;
+                            continue; /* Kết thúc ngay, không chạy Relay cửa */
+                        }
+                        if (app_device_state_HasMode(DEVICE_MODE_LOCKED_RF) || app_device_state_HasMode(DEVICE_MODE_LOCKED_TEMP)) {
                             ESP_LOGW(TAG, "Thiết bị đang trong khung giờ KHÓA NGOẠI VI! Bỏ qua lệnh bấm nút (0x%02X)", u8PressedBtn);
                             
                             /* (Tùy chọn) Kêu còi báo hiệu từ chối thao tác */
@@ -129,7 +166,7 @@ static void app_logic_touch_Task(void *pArg)
                                 /* Cập nhật UI thanh trượt trên App về mốc dừng thực tế */
                                 // (void)app_logic_mqtt_publisher_ReportGateData(0, 1, 0, u8StopLevel);
                             }
-                        } else if ((u8PressedBtn & DF_TOUCH_BTN_CS7) != 0U) {
+                        } else if ((u8PressedBtn & DF_TOUCH_BTN_CS7 ) != 0U) {
                             ESP_LOGI(TAG, "→ Lệnh: ĐÓNG (CS7)");
                             app_logic_relay_Close();
                             (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
@@ -139,6 +176,10 @@ static void app_logic_touch_Task(void *pArg)
                             }
                         } else {
                             ESP_LOGW(TAG, "Nhấn nhả nút không xác định: 0x%02X", u8PressedBtn);
+                        }
+                        // Chỉ đặt lịch khóa tạm thời khi thiết bị đã có mạng 
+                        if (!app_device_state_HasMode(DEVICE_MODE_UNCONNECTED)) {
+                            app_logic_extra_config_StartAntiAnimalWindow();
                         }
                     }
                 }
@@ -170,7 +211,7 @@ esp_err_t app_logic_touch_Init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    if (xTaskCreate(app_logic_touch_Task, "touch_logic",DF_TASK_STACK_MEDIUM, NULL,DF_TASK_PRIO_NORMAL, &g_hTouchTask) != pdPASS) {
+    if (xTaskCreate(app_logic_touch_Task, "touch_logic",DF_TASK_STACK_NETWORK, NULL,DF_TASK_PRIO_NORMAL, &g_hTouchTask) != pdPASS) {
         vQueueDelete(g_hTouchCommandQueue);
         g_hTouchCommandQueue = NULL;
         return ESP_ERR_NO_MEM;

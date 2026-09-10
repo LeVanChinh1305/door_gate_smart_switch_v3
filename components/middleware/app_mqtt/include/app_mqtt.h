@@ -35,6 +35,9 @@ const app_nvs_device_config_t *app_mqtt_GetDeviceConfig(void);
  */
 bool app_mqtt_IsConnected(void);
 
+
+esp_err_t app_mqtt_Stop(void);
+
 #ifdef __cplusplus
 }
 #endif

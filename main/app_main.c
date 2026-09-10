@@ -26,6 +26,9 @@ static const char *TAG = "APP_MAIN";
 static app_nvs_device_config_t sNvsConfig;
 static app_nvs_device_config_t sDeviceConfig;
 
+static bool s_bIsBlufiInited = false;
+static bool s_bIsUdpInited = false; 
+
 void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(10000));
 
@@ -110,18 +113,16 @@ void app_main(void) {
           
           /* Cập nhật Bitmask: Tắt UNCONNECTED, Bật CONNECT_AUTO */
           app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
-          app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, true);
+          app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
           
           app_led_state_SetState(E_LED_STATE_LOCKED);
       }
   }
   else if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
-      ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối tự động (BluFi)...");
-      (void)app_blufi_Init();
+    ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối tự động (BluFi)...");
   }
   else if (app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
-      ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối thủ công (UDP)...");
-      // Triển khai logic lắng nghe cấu hình qua cổng UDP tại đây
+    ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối thủ công (UDP)...");
   }
   else if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
       ESP_LOGI(TAG, "Thiết bị đang ở chế độ hoạt động bình thường, kiểm tra kết nối mạng...");
@@ -175,6 +176,38 @@ void app_main(void) {
 
   // Vòng lặp chính của app_main (giữ task chính hoạt động)
   while (true) {
-    vTaskDelay(pdMS_TO_TICKS(10000U));
+    /* 1. Kích hoạt BluFi khi ở mode CONNECT_AUTO và chưa Init */
+    if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
+      if (!s_bIsBlufiInited) {
+        ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_AUTO -> Tắt MQTT, udp Khởi tạo BluFi...");
+        (void)app_mqtt_Stop();
+        // tắt udp 
+        
+        s_bIsBlufiInited = true;
+        (void)app_blufi_Init();
+      }
+    }
+    /* TỰ ĐỘNG DỌN DẸP & THU HỒI ~50KB RAM KHI THOÁT CHẾ ĐỘ BLUFI */
+    else if (s_bIsBlufiInited) {
+      ESP_LOGI(TAG, "Thoát chế độ CONNECT_AUTO -> Tắt Bluetooth & Trả RAM về Heap...");
+      (void)app_blufi_Deinit();
+      s_bIsBlufiInited = false; /* Reset cờ để sẵn sàng cho lần bấm giữ 3s tiếp theo */
+    }
+    
+    /* 2. Kích hoạt UDP khi ở mode CONNECT_MANUAL và chưa Init */
+    if (app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
+      if (!s_bIsUdpInited) {
+        ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_MANUAL -> Khởi tạo UDP Socket...");
+        s_bIsUdpInited = true;
+        // (void)app_udp_Init();
+    }
+    }
+    else if (s_bIsUdpInited) {
+      ESP_LOGI(TAG, "Thoát chế độ CONNECT_MANUAL -> Dừng UDP Socket...");
+      // (void)app_udp_Deinit();
+      s_bIsUdpInited = false;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1000U));
   }
 }
