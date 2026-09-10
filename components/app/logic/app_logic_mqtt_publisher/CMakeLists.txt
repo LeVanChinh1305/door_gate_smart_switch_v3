@@ -9,4 +9,5 @@ idf_component_register(
         json 
         esp_wifi
         app_wifi
+        app_logic_extra_config
 )

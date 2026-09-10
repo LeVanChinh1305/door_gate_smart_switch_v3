@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include "esp_wifi.h"
 #include "app_wifi.h"
+#include "app_logic_extra_config.h"
 
 static const char *TAG = "APP_MQTT_PUB";
 
@@ -232,4 +233,96 @@ esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, i
              iErrorCode);
 
     return app_logic_mqtt_publisher_SendResponse(acResponse);
+}
+
+
+esp_err_t app_logic_mqtt_publisher_ReportExtraConfig(void)
+{
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
+    if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
+        ESP_LOGE(TAG, "Lỗi: Chưa có cấu hình MQTT Publisher");
+        return ESP_FAIL;
+    }
+
+    /* 1. Khởi tạo cJSON Root Object */
+    cJSON *jsRoot = cJSON_CreateObject();
+    if (jsRoot == NULL) {
+        return ESP_FAIL;
+    }
+
+    /* 2. Điền các thông tin định danh hệ thống */
+    cJSON_AddStringToObject(jsRoot, "name", "CmdGetExtraConfig");
+    cJSON_AddNumberToObject(jsRoot, "devT", psConfig->dev_type);
+    cJSON_AddStringToObject(jsRoot, "devExtAddr", psConfig->dev_ext_addr);
+
+    /* 3. Điền các trường cấu hình ngoại vi & LED */
+    cJSON_AddNumberToObject(jsRoot, "buzzerEnb", g_sExtraConfig.buzzerEnb);
+    cJSON_AddNumberToObject(jsRoot, "ledEnb", g_sExtraConfig.ledEnb);
+    cJSON_AddNumberToObject(jsRoot, "ledRgbOn", g_sExtraConfig.ledRgbOn);
+    cJSON_AddNumberToObject(jsRoot, "ledRgbOff", g_sExtraConfig.ledRgbOff);
+
+    /* 4. Cấu hình chi tiết cho Cổng 1 (Gate 1) */
+    cJSON_AddNumberToObject(jsRoot, "gate_1_type", g_sExtraConfig.gate_1_type);
+    cJSON_AddNumberToObject(jsRoot, "gate_1_control_mode", g_sExtraConfig.gate_1_control_mode);
+    cJSON_AddNumberToObject(jsRoot, "gate_1_led_off", g_sExtraConfig.gate_1_led_off);
+    cJSON_AddNumberToObject(jsRoot, "gate_1_rgb_on", g_sExtraConfig.gate_1_rgb_on);
+    cJSON_AddNumberToObject(jsRoot, "gate_1_rgb_off", g_sExtraConfig.gate_1_rgb_off);
+
+    /* 5. Cấu hình chi tiết cho Cổng 2 (Gate 2) */
+    cJSON_AddNumberToObject(jsRoot, "gate_2_type", g_sExtraConfig.gate_2_type);
+    cJSON_AddNumberToObject(jsRoot, "gate_2_control_mode", g_sExtraConfig.gate_2_control_mode);
+    cJSON_AddNumberToObject(jsRoot, "gate_2_led_off", g_sExtraConfig.gate_2_led_off);
+    cJSON_AddNumberToObject(jsRoot, "gate_2_rgb_on", g_sExtraConfig.gate_2_rgb_on);
+    cJSON_AddNumberToObject(jsRoot, "gate_2_rgb_off", g_sExtraConfig.gate_2_rgb_off);
+
+    /* 6. Cấu hình chi tiết cho Cổng 3 (Gate 3) */
+    cJSON_AddNumberToObject(jsRoot, "gate_3_type", g_sExtraConfig.gate_3_type);
+    cJSON_AddNumberToObject(jsRoot, "gate_3_control_mode", g_sExtraConfig.gate_3_control_mode);
+    cJSON_AddNumberToObject(jsRoot, "gate_3_led_off", g_sExtraConfig.gate_3_led_off);
+    cJSON_AddNumberToObject(jsRoot, "gate_3_rgb_on", g_sExtraConfig.gate_3_rgb_on);
+    cJSON_AddNumberToObject(jsRoot, "gate_3_rgb_off", g_sExtraConfig.gate_3_rgb_off);
+
+    /* 7. Khung giờ ban đêm (Night Mode) */
+    cJSON_AddNumberToObject(jsRoot, "nightModeEnb", g_sExtraConfig.nightModeEnb);
+    cJSON_AddNumberToObject(jsRoot, "nightBegin", g_sExtraConfig.nightBegin);
+    cJSON_AddNumberToObject(jsRoot, "nightEnd", g_sExtraConfig.nightEnd);
+    cJSON_AddNumberToObject(jsRoot, "nightTz", g_sExtraConfig.nightTz);
+
+    /* 8. Khung giờ cảnh báo (Warning Mode) */
+    cJSON_AddNumberToObject(jsRoot, "warningEnb", g_sExtraConfig.warningEnb);
+    cJSON_AddNumberToObject(jsRoot, "warningBegin", g_sExtraConfig.warningBegin);
+    cJSON_AddNumberToObject(jsRoot, "warningEnd", g_sExtraConfig.warningEnd);
+
+    /* 9. Độ sáng từng phím bấm & tổng thể */
+    cJSON_AddNumberToObject(jsRoot, "gate_1_lightness", g_sExtraConfig.switch_1_lightness);
+    cJSON_AddNumberToObject(jsRoot, "gate_2_lightness", g_sExtraConfig.switch_2_lightness);
+    cJSON_AddNumberToObject(jsRoot, "gate_3_lightness", g_sExtraConfig.switch_3_lightness);
+    cJSON_AddNumberToObject(jsRoot, "led_lightness", g_sExtraConfig.led_lightness);
+
+    /* 10. Khóa Anti-Animal & Đếm ngược cửa */
+    cJSON_AddNumberToObject(jsRoot, "anti_animal_enb", g_sExtraConfig.anti_animal_enb);
+    cJSON_AddNumberToObject(jsRoot, "anti_animal_lock_time", g_sExtraConfig.anti_animal_lock_time);
+    cJSON_AddNumberToObject(jsRoot, "gate_countdown", g_sExtraConfig.gate_countdown);
+
+    /* 11. Chu kỳ SGM & Gap */
+    cJSON_AddNumberToObject(jsRoot, "sgmCycle", g_sExtraConfig.sgmCycle);
+    cJSON_AddNumberToObject(jsRoot, "sgmCycleGap", g_sExtraConfig.sgmCycleGap);
+    cJSON_AddNumberToObject(jsRoot, "sgmUseCycleGap", g_sExtraConfig.sgmUseCycleGap);
+
+    /* 12. Khóa ngoại vi (Lock RF) */
+    cJSON_AddNumberToObject(jsRoot, "lockRFEnb", g_sExtraConfig.lockRFEnb);
+    cJSON_AddNumberToObject(jsRoot, "lockRFBegin", g_sExtraConfig.lockRFBegin);
+    cJSON_AddNumberToObject(jsRoot, "lockRFEnd", g_sExtraConfig.lockRFEnd);
+
+    /* 13. Xuất chuỗi Unformatted và Publish qua MQTT */
+    char *pcResponseJson = cJSON_PrintUnformatted(jsRoot);
+    esp_err_t eRet = ESP_FAIL;
+    
+    if (pcResponseJson != NULL) {
+        eRet = app_logic_mqtt_publisher_SendResponse(pcResponseJson);
+        free(pcResponseJson);
+    }
+    
+    cJSON_Delete(jsRoot);
+    return eRet;
 }

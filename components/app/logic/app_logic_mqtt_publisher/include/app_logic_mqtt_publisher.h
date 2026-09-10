@@ -42,6 +42,8 @@ esp_err_t app_logic_mqtt_publisher_ReportDeviceInfo(void);
  */
 esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, int32_t i32Id, int iErrorCode);
 
+
+esp_err_t app_logic_mqtt_publisher_ReportExtraConfig(void);
 #ifdef __cplusplus
 }
 #endif
