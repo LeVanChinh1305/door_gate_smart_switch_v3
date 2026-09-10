@@ -7,4 +7,5 @@ idf_component_register(
         common
         app_logic_led
         app_mqtt
+        app_relay_state
 )

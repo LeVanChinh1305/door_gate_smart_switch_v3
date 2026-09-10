@@ -115,6 +115,7 @@ void app_main(void) {
       ESP_LOGI(TAG, "Thiết bị đang ở chế độ UNCONNECTED, kiểm tra NVS cấu hình Wi-Fi...");
       if (!app_nvs_IsProvisionedWifiConfig()) {
           ESP_LOGI(TAG, "Chưa có Wi-Fi trong NVS, đang chờ lệnh kết nối thủ công/ tự động");
+          app_led_state_SetState(E_LED_STATE_UNCONNECTED);
       } else {
           ESP_LOGI(TAG, "Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái kết nối tự động...");
           

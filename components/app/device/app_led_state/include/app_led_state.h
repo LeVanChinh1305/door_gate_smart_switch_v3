@@ -1,8 +1,3 @@
-/**
- * @file    led_device_state.h
- * @brief   Quản lý trạng thái và hiệu ứng LED theo các chế độ hoạt động của thiết bị (V2).
- */
-
 #ifndef LED_DEVICE_STATE_H
 #define LED_DEVICE_STATE_H
 
@@ -15,17 +10,19 @@
  * @brief Định nghĩa các trạng thái hoạt động của thiết bị liên quan đến hiển thị LED
  */
 typedef enum {
-    E_LED_STATE_NORMAL_IDLE = 0,    // Trạng thái bình thường / Chờ lệnh kết nối 
+    E_LED_STATE_UNCONNECTED = 0,    // Khi vừa khởi động lên chưa cấu hình: Nhấp nháy trắng nhạt
+    E_LED_STATE_NORMAL_IDLE,        // Trạng thái bình thường / Chờ lệnh kết nối 
     E_LED_STATE_BLUFI_AUTO,         // Chế độ kết nối tự động (BluFi - Giữ 3s): Nhấp nháy xanh dương
     E_LED_STATE_CONNECT_MANUAL,     // Chế độ kết nối thủ công (Giữ 7s): Nhấp nháy đỏ
     E_LED_STATE_NORMAL,             // Chế độ đã kết nối, hoạt động bình thường 
     E_LED_STATE_LOCKED,             // Trạng thái khóa tạm thời 
     E_LED_STATE_LOCKED_CHILD,       // Khóa trẻ em
+    E_LED_STATE_LOCKED_RF,          // Loại bỏ điều khiển ngoài ý muốn (Khóa phím theo giờ)
     E_LED_STATE_WARNING,            // Cảnh báo (An ninh / Xô lô / Còi hú)
     E_LED_STATE_OTA,                // Đang cập nhật firmware OTA
-    E_LED_STATE_GATE_UP,     //  Đang mở
-    E_LED_STATE_GATE_DOWN,   //  Đang đóng
-    E_LED_STATE_GATE_STOP,   //  Dừng
+    E_LED_STATE_GATE_UP,            // Đang mở
+    E_LED_STATE_GATE_DOWN,          // Đang đóng
+    E_LED_STATE_GATE_STOP,          // Dừng
     E_LED_STATE_MAX
 } e_led_device_state_t;
 
@@ -47,5 +44,10 @@ esp_err_t app_led_state_SetState(e_led_device_state_t eState);
  * @return  e_led_device_state_t Trạng thái hiện tại.
  */
 e_led_device_state_t app_led_state_GetState(void);
+
+/**
+ * @brief   BỔ SUNG: Tự động đồng bộ từ Bitmask của app_device_state sang LED State.
+ */
+void app_led_state_UpdateFromDeviceMask(void);
 
 #endif /* LED_DEVICE_STATE_H */

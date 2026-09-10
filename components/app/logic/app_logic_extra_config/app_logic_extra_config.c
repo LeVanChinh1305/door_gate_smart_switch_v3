@@ -9,6 +9,8 @@
 #include <sys/time.h>
 #include <time.h>
 #include "app_device_state.h"
+#include "app_nvs.h"
+#include "app_relay_state.h"
 
 static const char *TAG = "APP_LOGIC_EXTRA_CONFIG";
 /* Biến Timer tĩnh quản lý lịch bật/tắt Khóa RF */
@@ -16,6 +18,112 @@ static TimerHandle_t g_hLockRFTimer = NULL;
 // biến quản lý khóa tạm thời 
 static TimerHandle_t g_hAntiAnimalTimer = NULL;
 static char s_acExtraCfgResponseBuffer[1024];
+
+
+static inline app_led_color_t unpack_rgb_to_color(uint32_t u32ColorVal) {
+    app_led_color_t sColor;
+    sColor.r = (uint8_t)((u32ColorVal >> 16) & 0xFF);
+    sColor.g = (uint8_t)((u32ColorVal >> 8) & 0xFF);
+    sColor.b = (uint8_t)(u32ColorVal & 0xFF);
+    return sColor;
+}
+
+/**
+ * @brief Cập nhật màu và độ sáng xuống phần cứng LED thông qua Queue của app_logic_led
+ */
+void app_logic_extra_config_ApplyLedConfig(void)
+{
+    /* 1. Nếu TẮT Đèn nền (ledEnb == 0) -> Đặt độ sáng = 0 */
+    if (g_sExtraConfig.ledEnb == 0) {
+        (void)app_logic_led_SetBrightness(0);
+        (void)app_logic_led_SetColor(APP_LED_COLOR_OFF);
+        ESP_LOGI(TAG, "Đã TẮT toàn bộ Đèn nền LED");
+        return;
+    }
+
+    /* 2. Áp dụng độ sáng % (Quy đổi 0..100% sang 0..255) */
+    uint8_t u8Bright255 = (uint8_t)((g_sExtraConfig.led_lightness * 255) / 100);
+    (void)app_logic_led_SetBrightness(u8Bright255);
+
+    /* 3. Đọc trạng thái Relay/Cửa hiện tại để chọn màu ON hay OFF */
+    e_relay_state_t eRelayState = app_relay_state_GetState();
+    uint32_t u32CurrentColorVal;
+    if (eRelayState == E_RELAY_STATE_OPENING || eRelayState == E_RELAY_STATE_OPENED) {
+        u32CurrentColorVal = g_sExtraConfig.ledRgbOn;
+    } else {
+        u32CurrentColorVal = g_sExtraConfig.ledRgbOff;
+    }
+    app_led_color_t sColor = unpack_rgb_to_color(u32CurrentColorVal);
+
+    /* 4. Đẩy lệnh đổi màu toàn bộ dải LED vào Queue */
+    (void)app_logic_led_SetColor(sColor);
+
+    ESP_LOGI(TAG, "Cập nhật LED thành công: Brightness=%d%% (%d/255), RGB=0x%06X (relay=%s)",
+             g_sExtraConfig.led_lightness, u8Bright255, (unsigned int)u32CurrentColorVal,
+             app_relay_state_ToString(eRelayState));
+}
+
+static void handle_cmd_led_enable(const cJSON *pValue, bool *pbConfigChanged)
+{
+    const cJSON *item = cJSON_GetObjectItem(pValue, "ledEnb");
+    if (cJSON_IsNumber(item) && (g_sExtraConfig.ledEnb != item->valueint)) {
+        g_sExtraConfig.ledEnb = item->valueint;
+        *pbConfigChanged = true;
+        app_logic_extra_config_ApplyLedConfig();
+        ESP_LOGI(TAG, "-> CẬP NHẬT BẬT/TẮT LED: %d", g_sExtraConfig.ledEnb);
+    }
+}
+
+static void handle_cmd_led_lightness(const cJSON *pValue, bool *pbConfigChanged)
+{
+    const cJSON *item = cJSON_GetObjectItem(pValue, "led_lightness");
+    if (cJSON_IsNumber(item) && (g_sExtraConfig.led_lightness != item->valueint)) {
+        g_sExtraConfig.led_lightness = item->valueint;
+        *pbConfigChanged = true;
+        app_logic_extra_config_ApplyLedConfig();
+        ESP_LOGI(TAG, "-> CẬP NHẬT ĐỘ SÁNG LED: %d%%", g_sExtraConfig.led_lightness);
+    }
+}
+
+static void handle_cmd_led_rgb_on(const cJSON *pValue, bool *pbConfigChanged)
+{
+    const cJSON *item = cJSON_GetObjectItem(pValue, "ledRgbOn");
+    if (cJSON_IsNumber(item)) {
+        uint32_t u32Val = (uint32_t)item->valuedouble;
+        if (g_sExtraConfig.ledRgbOn != u32Val) {
+            g_sExtraConfig.ledRgbOn = u32Val;
+            *pbConfigChanged = true;
+            app_logic_extra_config_ApplyLedConfig();
+            ESP_LOGI(TAG, "-> CẬP NHẬT MÀU LED BẬT: 0x%06X", (unsigned int)g_sExtraConfig.ledRgbOn);
+        }
+    }
+}
+
+static void handle_cmd_led_rgb_off(const cJSON *pValue, bool *pbConfigChanged)
+{
+    const cJSON *item = cJSON_GetObjectItem(pValue, "ledRgbOff");
+    if (cJSON_IsNumber(item)) {
+        uint32_t u32Val = (uint32_t)item->valuedouble;
+        if (g_sExtraConfig.ledRgbOff != u32Val) {
+            g_sExtraConfig.ledRgbOff = u32Val;
+            *pbConfigChanged = true;
+            app_logic_extra_config_ApplyLedConfig();
+            ESP_LOGI(TAG, "-> CẬP NHẬT MÀU LED TẮT: 0x%06X", (unsigned int)g_sExtraConfig.ledRgbOff);
+        }
+    }
+}
+
+static void handle_cmd_reset_all(const cJSON *pValue, bool *pbConfigChanged)
+{
+    if (cJSON_GetObjectItem(pValue, "resetAll") != NULL) {
+        ESP_LOGI(TAG, "-> LỆNH KHÔI PHỤC CẤU HÌNH MẶC ĐỊNH (resetAll)");
+        app_nvs_SetDefaultExtraConfig(&g_sExtraConfig);
+        app_logic_extra_config_ApplyLedConfig();
+        *pbConfigChanged = true;
+    }
+}
+
+
 /**
  * @brief Callback hết thời gian mở cửa sổ thao tác -> TỰ ĐỘNG KHÓA LẠI
  */
@@ -232,10 +340,10 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
 
     /* Cập nhật toàn bộ các trường dữ liệu bằng Macro */
     UPDATE_CFG_INT(pValue, "buzzerEnb", g_sExtraConfig.buzzerEnb);
-    UPDATE_CFG_INT(pValue, "ledEnb", g_sExtraConfig.ledEnb);
-    UPDATE_CFG_UINT32(pValue, "ledRgbOn", g_sExtraConfig.ledRgbOn);
-    UPDATE_CFG_UINT32(pValue, "ledRgbOff", g_sExtraConfig.ledRgbOff);
-    UPDATE_CFG_INT(pValue, "led_lightness", g_sExtraConfig.led_lightness);
+    /* LƯU Ý: Không dùng UPDATE_CFG_* cho ledEnb, ledRgbOn, ledRgbOff, led_lightness ở đây.
+     * Các trường này được xử lý bởi handle_cmd_led_* bên dưới, vừa cập nhật g_sExtraConfig
+     * vừa gọi ApplyLedConfig(). Nếu dùng UPDATE_CFG_* trước, giá trị đã bằng nhau rồi
+     * nên điều kiện kiểm tra trong handle_cmd_led_* luôn false và ApplyLedConfig không chạy. */
 
     UPDATE_CFG_INT(pValue, "gate_1_type", g_sExtraConfig.gate_1_type);
     UPDATE_CFG_INT(pValue, "gate_1_control_mode", g_sExtraConfig.gate_1_control_mode);
@@ -280,6 +388,21 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
     UPDATE_CFG_INT(pValue, "lockRFEnb", g_sExtraConfig.lockRFEnb);
     UPDATE_CFG_UINT32(pValue, "lockRFBegin", g_sExtraConfig.lockRFBegin);
     UPDATE_CFG_UINT32(pValue, "lockRFEnd", g_sExtraConfig.lockRFEnd);
+
+    handle_cmd_reset_all(pValue, &bConfigChanged);
+
+    if (cJSON_GetObjectItem(pValue, "ledEnb") != NULL) {
+        handle_cmd_led_enable(pValue, &bConfigChanged);
+    }
+    if (cJSON_GetObjectItem(pValue, "led_lightness") != NULL) {
+        handle_cmd_led_lightness(pValue, &bConfigChanged);
+    }
+    if (cJSON_GetObjectItem(pValue, "ledRgbOn") != NULL) {
+        handle_cmd_led_rgb_on(pValue, &bConfigChanged);
+    }
+    if (cJSON_GetObjectItem(pValue, "ledRgbOff") != NULL) {
+        handle_cmd_led_rgb_off(pValue, &bConfigChanged);
+    }
 
     if((cJSON_GetObjectItem(pValue, "lockRFEnb") != NULL)||(cJSON_GetObjectItem(pValue, "lockRFBegin") != NULL)||(cJSON_GetObjectItem(pValue, "lockRFEnd") != NULL)){
         /* 1. Kiểm tra và áp dụng Bitmask ngay lập tức */
@@ -384,7 +507,6 @@ bool app_logic_extra_config_IsRFLocked(void)
 
     return bIsLocked;
 }
-
 
 /**
  * @brief Kiểm tra xem thời gian thực hiện tại có thuộc khung giờ Cảnh báo ban đêm hay không

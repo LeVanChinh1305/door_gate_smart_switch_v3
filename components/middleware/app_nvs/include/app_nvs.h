@@ -179,6 +179,12 @@ esp_err_t app_nvs_ClearDeviceConfig(void);
  */
 esp_err_t app_nvs_ClearExtraConfig(void);
 
+
+/**
+ * @brief Khai báo prototype hàm gán giá trị ExtraConfig mặc định
+ */
+void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config);
+
 #ifdef __cplusplus
 }
 #endif

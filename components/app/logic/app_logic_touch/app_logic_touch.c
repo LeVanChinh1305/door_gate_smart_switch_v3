@@ -88,7 +88,7 @@ static void app_logic_touch_Task(void *pArg)
                         /* TODO: Gọi hàm Config Manual */
                         app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
                         app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, true);
-
+                        app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
                     } 
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
                         // th1: giữ đồng thời 2 nút đóng + mở 
@@ -125,7 +125,7 @@ static void app_logic_touch_Task(void *pArg)
                                 app_led_state_SetState(E_LED_STATE_NORMAL);
                             } else {
                                 app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, true);
-                                app_led_state_SetState(E_LED_STATE_NORMAL_IDLE);
+                                app_led_state_SetState(E_LED_STATE_UNCONNECTED);
                             }
 
                             u8PrevStatus = u8CurrentStatus;
