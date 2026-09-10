@@ -1,5 +1,5 @@
 idf_component_register(
     SRCS "app_sntp.c"
     INCLUDE_DIRS "include"
-    REQUIRES lwip esp_netif
+    REQUIRES lwip esp_netif app_logic_extra_config
 )

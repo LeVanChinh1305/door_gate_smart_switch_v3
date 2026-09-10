@@ -94,6 +94,16 @@ static void app_logic_touch_Task(void *pArg)
                         (void)app_blufi_Init();
                     } 
                     else {
+                        if (app_device_state_HasMode(DEVICE_MODE_LOCKED_RF)) {
+                            ESP_LOGW(TAG, "Thiết bị đang trong khung giờ KHÓA NGOẠI VI! Bỏ qua lệnh bấm nút (0x%02X)", u8PressedBtn);
+                            
+                            /* (Tùy chọn) Kêu còi báo hiệu từ chối thao tác */
+                            // app_logic_buzzer_Beep(100);
+                            
+                            /* Kết thúc ngay nhánh Short Press, không kích hoạt Relay hay gửi Telemetry */
+                            u8PrevStatus = u8CurrentStatus;
+                            continue;
+                        }
                         const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
                         app_logic_control_history_item_t sLog;
                         (void)memset(&sLog, 0, sizeof(app_logic_control_history_item_t));

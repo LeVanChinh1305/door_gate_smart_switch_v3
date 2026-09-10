@@ -18,6 +18,7 @@
 #include "app_mqtt.h"
 #include "app_wifi.h"
 #include "app_logic_schedule.h"
+#include "app_logic_extra_config.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -37,6 +38,14 @@ void app_main(void) {
     return;
   }
   ESP_LOGI(TAG, "Khởi tạo NVS thành công!");
+  eRet = app_nvs_LoadExtraConfig(&g_sExtraConfig);
+  if (eRet == ESP_OK) {
+    ESP_LOGI(TAG, "Nạp Extra Config từ NVS vào RAM thành công");
+    /* Kiểm tra và bật cờ DEVICE_MODE_LOCKED_RF nếu đang trong khung giờ khóa */
+    (void)app_logic_extra_config_IsRFLocked();
+  } else {
+    ESP_LOGW(TAG, "Không tìm thấy Extra Config trong NVS (dùng mặc định)");
+  }
 
   // 2. Khởi tạo các module nghiệp vụ tầng Application
   eRet = app_logic_relay_Init();

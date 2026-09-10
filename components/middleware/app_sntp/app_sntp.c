@@ -10,6 +10,7 @@
 #include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "app_logic_extra_config.h"
 
 static const char *TAG = "APP_SNTP";
 
@@ -21,6 +22,11 @@ static void time_sync_notification_cb(struct timeval *tv)
     time_t tNow = 0;
     (void)time(&tNow);
     ESP_LOGI(TAG, "=> Đồng bộ SNTP thành công! Timestamp hiện tại: %lld", (long long)tNow);
+    /* 1. Cập nhật ngay Bitmask theo giờ thực vừa lấy từ Internet */
+    (void)app_logic_extra_config_IsRFLocked();
+
+    /* 2. Tính toán và kích hoạt Dynamic Timer đếm ngược mốc bật/tắt tiếp theo */
+    app_logic_extra_config_ScheduleNextRFLock();
 }
 
 /**

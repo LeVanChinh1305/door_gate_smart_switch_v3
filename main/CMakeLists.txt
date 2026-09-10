@@ -16,4 +16,5 @@ idf_component_register(
         app_led_state
         app_relay_state
         app_logic_schedule
+        app_logic_extra_config
 )

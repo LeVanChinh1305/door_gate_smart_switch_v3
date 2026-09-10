@@ -8,6 +8,7 @@
 
 #include "cJSON.h"
 #include "esp_err.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,6 +26,19 @@ void app_logic_extra_config_ProcessGet(char *pcOutBuffer, size_t zMaxLen);
  * @param pValue Đối tượng JSON chứa các trường cấu hình (có thể là jsRoot hoặc object "value").
  */
 void app_logic_extra_config_ProcessSet(const cJSON *pValue);
+
+
+/**
+ * @brief Kiểm tra và tự động cập nhật bitmask DEVICE_MODE_LOCKED_RF dựa theo khung giờ ExtraConfig.
+ * @return true nếu đang trong khung giờ khóa và lockRFEnb =1, false nếu bình thường.
+ */
+bool app_logic_extra_config_IsRFLocked(void);
+
+
+/**
+ * @brief Lập lịch Dynamic Timer tự động thức dậy đúng mốc lockRFBegin/lockRFEnd tiếp theo.
+ */
+void app_logic_extra_config_ScheduleNextRFLock(void);
 
 #ifdef __cplusplus
 }
