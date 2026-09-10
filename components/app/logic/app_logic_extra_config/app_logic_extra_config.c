@@ -11,6 +11,7 @@
 #include "app_device_state.h"
 #include "app_nvs.h"
 #include "app_relay_state.h"
+#include "app_logic_buzzer.h"
 
 static const char *TAG = "APP_LOGIC_EXTRA_CONFIG";
 /* Biến Timer tĩnh quản lý lịch bật/tắt Khóa RF */
@@ -123,6 +124,24 @@ static void handle_cmd_reset_all(const cJSON *pValue, bool *pbConfigChanged)
     }
 }
 
+static void handle_cmd_buzzer_enable(const cJSON *pValue, bool *pbConfigChanged)
+{
+    const cJSON *item = cJSON_GetObjectItem(pValue, "buzzerEnb");
+    if (cJSON_IsNumber(item) && (g_sExtraConfig.buzzerEnb != item->valueint)) {
+        g_sExtraConfig.buzzerEnb = item->valueint;
+        *pbConfigChanged = true;
+
+        if (g_sExtraConfig.buzzerEnb == 1) {
+            /* Phát 1 tiếng bíp ngắn 80ms thông qua Queue để báo hiệu BẬT CÒI */
+            (void)app_logic_buzzer_Beep(80);
+            ESP_LOGI(TAG, "-> ĐÃ BẬT CỜI BÍP (buzzerEnb = 1)");
+        } else {
+            /* Tắt còi lập tức nếu còi đang kêu */
+            (void)app_logic_buzzer_Off();
+            ESP_LOGI(TAG, "-> ĐÃ TẮT CỜI BÍP (buzzerEnb = 0)");
+        }
+    }
+}
 
 /**
  * @brief Callback hết thời gian mở cửa sổ thao tác -> TỰ ĐỘNG KHÓA LẠI
@@ -439,6 +458,10 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
         }
     }
 
+    if (cJSON_GetObjectItem(pValue, "buzzerEnb") != NULL) {
+        handle_cmd_buzzer_enable(pValue, &bConfigChanged);
+    }
+
     /* Lưu vào NVS nếu có bất kỳ biến nào bị thay đổi so với cấu hình hiện tại */
     esp_err_t eErr = ESP_OK;
     if (bConfigChanged) {
@@ -557,4 +580,29 @@ bool app_logic_extra_config_IsWarningNightActive(void)
     }
 
     return bIsWarningActive;
+}
+
+/**
+ * @brief Kiểm tra cấu hình buzzerEnb và phát tiếng bíp qua Queue an toàn
+ */
+void app_logic_extra_config_TriggerBuzzer(uint32_t u32DurationMs)
+{
+    /* Nếu người dùng TẮT còi trên App (buzzerEnb == 0) -> Bỏ qua */
+    if (g_sExtraConfig.buzzerEnb == 0) {
+        return;
+    }
+
+    /* Đẩy lệnh bíp vào Queue xử lý bất đồng bộ, không block task hiện tại */
+    (void)app_logic_buzzer_Beep(u32DurationMs);
+}
+
+void app_logic_extra_config_TriggerBuzzerRepeat(uint32_t u32DurationMs, uint32_t u32DelayMs, uint8_t u8RepeatCount)
+{
+    /* Nếu người dùng TẮT còi trên App (buzzerEnb == 0) -> Bỏ qua */
+    if (g_sExtraConfig.buzzerEnb == 0) {
+        return;
+    }
+
+    /* Đẩy lệnh bíp lặp lại vào Queue xử lý bất đồng bộ */
+    (void)app_logic_buzzer_BeepRepeat(u32DurationMs, u32DelayMs, u8RepeatCount);
 }

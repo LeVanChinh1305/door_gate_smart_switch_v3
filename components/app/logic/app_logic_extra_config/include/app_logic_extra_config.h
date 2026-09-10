@@ -55,6 +55,23 @@ void app_logic_extra_config_StartAntiAnimalWindow(void);
  */
 bool app_logic_extra_config_IsWarningNightActive(void);
 
+
+/**
+ * @brief  Kích hoạt bíp còi có kiểm tra cờ cấu hình buzzerEnb.
+ * @param  u32DurationMs Thời gian phát tiếng bíp (ms).
+ * @note   Nếu buzzerEnb == 0, hàm sẽ bỏ qua không phát bíp.
+ */
+void app_logic_extra_config_TriggerBuzzer(uint32_t u32DurationMs);
+
+/**
+ * @brief  Kích hoạt bíp còi lặp lại nhiều lần có kiểm tra cờ cấu hình buzzerEnb.
+ * @param  u32DurationMs Thời gian phát mỗi tiếng bíp (ms).
+ * @param  u32DelayMs Thời gian nghỉ giữa các tiếng bíp (ms).
+ * @param  u8RepeatCount Số lần lặp lại.
+ */
+void app_logic_extra_config_TriggerBuzzerRepeat(uint32_t u32DurationMs, uint32_t u32DelayMs, uint8_t u8RepeatCount);
+
+
 #ifdef __cplusplus
 }
 #endif

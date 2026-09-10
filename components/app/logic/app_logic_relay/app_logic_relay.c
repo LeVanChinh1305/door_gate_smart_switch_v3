@@ -203,6 +203,9 @@ static void app_logic_relay_Task(void *pArg)
 
             if (eErr != ESP_OK) {
                 ESP_LOGE(TAG, "Thực thi lệnh relay thất bại: %s", esp_err_to_name(eErr));
+            } else {
+                /* Phát tiếng còi bíp 50ms phản hồi khi relay được điều khiển */
+                app_logic_extra_config_TriggerBuzzer(50);
             }
         }
     }
@@ -282,8 +285,8 @@ esp_err_t app_logic_relay_Open(void)
     if (app_logic_extra_config_IsWarningNightActive()) {
         ESP_LOGW(TAG, ">>> CẢNH BÁO BAN ĐÊM: Phát hiện cửa mở trong khung giờ bảo vệ!");
 
-        /* 1. Báo động còi & Nháy LED đỏ tại chỗ */
-        // app_logic_buzzer_BeepWarning();
+        /* 1. Báo động còi (bíp liên tục 3 lần) & Nháy LED đỏ tại chỗ */
+        app_logic_extra_config_TriggerBuzzerRepeat(100, 100, 3);
         app_led_state_SetState(E_LED_STATE_WARNING);
 
         /* 2. Gửi bản tin ReportWarningSgm (sensor=1) lên Topic Alert (mqtt_alert) */

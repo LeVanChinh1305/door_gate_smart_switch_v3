@@ -41,6 +41,15 @@ esp_err_t app_logic_buzzer_Off(void);
  */
 esp_err_t app_logic_buzzer_Beep(uint32_t u32DurationMs);
 
+/**
+ * @brief Gửi lệnh phát tiếng beep lặp lại nhiều lần.
+ * @param u32DurationMs Thời gian mỗi tiếng beep (ms).
+ * @param u32DelayMs Thời gian nghỉ giữa các tiếng beep (ms).
+ * @param u8RepeatCount Số lần lặp lại.
+ * @return ESP_OK nếu gửi thành công; mã lỗi nếu tham số hoặc queue không hợp lệ.
+ */
+esp_err_t app_logic_buzzer_BeepRepeat(uint32_t u32DurationMs, uint32_t u32DelayMs, uint8_t u8RepeatCount);
+
 #ifdef __cplusplus
 }
 #endif

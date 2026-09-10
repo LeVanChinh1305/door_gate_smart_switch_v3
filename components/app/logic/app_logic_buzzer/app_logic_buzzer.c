@@ -20,12 +20,15 @@ static const char *TAG = "APP_LOGIC_BUZZER";
 typedef enum {
     E_APP_LOGIC_BUZZER_CMD_ON = 0,
     E_APP_LOGIC_BUZZER_CMD_OFF,
-    E_APP_LOGIC_BUZZER_CMD_BEEP
+    E_APP_LOGIC_BUZZER_CMD_BEEP,
+    E_APP_LOGIC_BUZZER_CMD_BEEP_REPEAT
 } e_app_logic_buzzer_cmd_t;
 
 typedef struct {
     e_app_logic_buzzer_cmd_t eType;
     uint32_t u32DurationMs;
+    uint32_t u32DelayMs;
+    uint8_t u8RepeatCount;
 } app_logic_buzzer_queue_item_t;
 
 static QueueHandle_t g_hBuzzerCommandQueue = NULL;
@@ -50,6 +53,17 @@ static void app_logic_buzzer_Task(void *pArg)
                 eErr = app_buzzer_Off();
             } else if (sItem.eType == E_APP_LOGIC_BUZZER_CMD_BEEP) {
                 eErr = app_buzzer_Beep(sItem.u32DurationMs);
+            } else if (sItem.eType == E_APP_LOGIC_BUZZER_CMD_BEEP_REPEAT) {
+                eErr = ESP_OK;
+                for (uint8_t i = 0; i < sItem.u8RepeatCount; i++) {
+                    eErr = app_buzzer_Beep(sItem.u32DurationMs);
+                    if (eErr != ESP_OK) {
+                        break;
+                    }
+                    if (i + 1 < sItem.u8RepeatCount && sItem.u32DelayMs > 0) {
+                        vTaskDelay(pdMS_TO_TICKS(sItem.u32DelayMs));
+                    }
+                }
             }
             if (eErr != ESP_OK) {
                 ESP_LOGE(TAG, "Xử lý lệnh buzzer thất bại: %s", esp_err_to_name(eErr));
@@ -140,6 +154,20 @@ esp_err_t app_logic_buzzer_Beep(uint32_t u32DurationMs)
     app_logic_buzzer_queue_item_t sItem = {
         .eType = E_APP_LOGIC_BUZZER_CMD_BEEP,
         .u32DurationMs = u32DurationMs
+    };
+    return app_logic_buzzer_SendItem(&sItem);
+}
+
+esp_err_t app_logic_buzzer_BeepRepeat(uint32_t u32DurationMs, uint32_t u32DelayMs, uint8_t u8RepeatCount)
+{
+    if (u32DurationMs == 0U || u8RepeatCount == 0U) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    app_logic_buzzer_queue_item_t sItem = {
+        .eType = E_APP_LOGIC_BUZZER_CMD_BEEP_REPEAT,
+        .u32DurationMs = u32DurationMs,
+        .u32DelayMs = u32DelayMs,
+        .u8RepeatCount = u8RepeatCount
     };
     return app_logic_buzzer_SendItem(&sItem);
 }

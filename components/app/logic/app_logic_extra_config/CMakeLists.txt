@@ -8,4 +8,5 @@ idf_component_register(
         app_logic_led
         app_mqtt
         app_relay_state
+        app_logic_buzzer
 )
