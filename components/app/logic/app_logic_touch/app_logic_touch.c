@@ -131,6 +131,14 @@ static void app_logic_touch_Task(void *pArg)
                             u8PrevStatus = u8CurrentStatus;
                             continue; /* Kết thúc ngay, không chạy Relay cửa */
                         }
+                        /* Nếu đang ở chế độ UNCONNECTED hoặc NORMAL_IDLE (chờ cấu hình / chưa sẵn sàng) thì bỏ qua nút bấm đơn ngắn */
+                        e_led_device_state_t eLedState = app_led_state_GetState();
+                        if (eLedState == E_LED_STATE_UNCONNECTED || eLedState == E_LED_STATE_NORMAL_IDLE) {
+                            ESP_LOGW(TAG, "Thiết bị đang ở trạng thái chưa cấu hình / chờ kết nối (LED state: %d)! Bỏ qua lệnh bấm nút (0x%02X)", (int)eLedState, u8PressedBtn);
+                            u8PrevStatus = u8CurrentStatus;
+                            continue;
+                        }
+
                         if (app_device_state_HasMode(DEVICE_MODE_LOCKED_RF) || app_device_state_HasMode(DEVICE_MODE_LOCKED_TEMP)||app_device_state_HasMode(DEVICE_MODE_LOCKED_CHILD)) {
                             ESP_LOGW(TAG, "Thiết bị đang trong khung giờ KHÓA NGOẠI VI! Bỏ qua lệnh bấm nút (0x%02X)", u8PressedBtn);
                             
