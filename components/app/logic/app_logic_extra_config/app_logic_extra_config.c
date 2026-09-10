@@ -368,3 +368,55 @@ bool app_logic_extra_config_IsRFLocked(void)
 
     return bIsLocked;
 }
+
+
+/**
+ * @brief Kiểm tra xem thời gian thực hiện tại có thuộc khung giờ Cảnh báo ban đêm hay không
+ */
+bool app_logic_extra_config_IsWarningNightActive(void)
+{
+    /* 1. Nếu tính năng TẮT -> Trả về false ngay lập tức */
+    if (g_sExtraConfig.warningEnb == 0) {
+        return false;
+    }
+
+    /* 2. Lấy thời gian hệ thống hiện tại */
+    time_t tNow;
+    struct tm sTimeInfo;
+    time(&tNow);
+    localtime_r(&tNow, &sTimeInfo);
+
+    /* Bỏ qua nếu chưa đồng bộ SNTP chuẩn (>2024) */
+    if (sTimeInfo.tm_year < (2024 - 1900)) {
+        return false;
+    }
+
+    /* 3. Quy đổi thời gian hiện tại ra số giây trong ngày (0 -> 86399 giây) */
+    uint32_t u32CurrentSecOfDay = (uint32_t)(sTimeInfo.tm_hour * 3600 + sTimeInfo.tm_min * 60 + sTimeInfo.tm_sec);
+
+    /* 4. Quy đổi mốc warningBegin và warningEnd sang giây trong ngày (Cộng múi giờ UTC+7) */
+    uint32_t u32TzOffsetSec = (uint32_t)(g_sExtraConfig.nightTz * 3600);
+    uint32_t u32BeginSec = (uint32_t)((g_sExtraConfig.warningBegin + u32TzOffsetSec) % 86400U);
+    uint32_t u32EndSec = (uint32_t)((g_sExtraConfig.warningEnd + u32TzOffsetSec) % 86400U);
+
+    bool bIsWarningActive = false;
+
+    /* 5. So sánh khung giờ (Bao phủ cả khung giờ trong ngày lẫn vắt qua đêm như 18:33 -> 05:50) */
+    if (u32BeginSec <= u32EndSec) {
+        /* Khung giờ cùng 1 ngày */
+        if (u32CurrentSecOfDay >= u32BeginSec && u32CurrentSecOfDay <= u32EndSec) {
+            bIsWarningActive = true;
+        }
+    } else {
+        /* Khung giờ vắt qua đêm */
+        if (u32CurrentSecOfDay >= u32BeginSec || u32CurrentSecOfDay <= u32EndSec) {
+            bIsWarningActive = true;
+        }
+    }
+
+    if (bIsWarningActive) {
+        ESP_LOGI(TAG, "CẢNH BÁO BAN ĐÊM ACTIVE (%02d:%02d:%02d)",  sTimeInfo.tm_hour, sTimeInfo.tm_min, sTimeInfo.tm_sec);
+    }
+
+    return bIsWarningActive;
+}

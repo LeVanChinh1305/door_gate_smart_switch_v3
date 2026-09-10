@@ -75,4 +75,15 @@ void app_logic_telemetry_BuildControlItem(app_logic_control_history_item_t *pOut
 esp_err_t app_logic_telemetry_ReportControlHistory(const app_logic_control_history_item_t *pHistoryList, uint16_t u16ItemCount);
 esp_err_t app_logic_telemetry_ReportSensorHistory(const app_logic_sensor_history_item_t *pHistoryList, uint16_t u16ItemCount);
 
+/**
+ * @brief Bắn bản tin cảnh báo trạng thái cửa ReportWarningSgm lên Topic Alert (mqtt_alert)
+ * @param u8Sensor Cảnh báo ban đêm (1: kích hoạt, 0: không)
+ * @param u8CloseError Cảnh báo đóng cửa lỗi (1: kích hoạt, 0: không)
+ * @param u8AntiStuck Cảnh báo cảm biến chống xô (1: kích hoạt, 0: không)
+ * @param u8Src Nguồn kích hoạt (14: cảm biến, 1: phím bấm/app, ...)
+ * @param pcSrcId ID định danh nguồn (truyền NULL để tự động dùng MAC thiết bị)
+ * @return esp_err_t ESP_OK nếu gửi thành công
+ */
+esp_err_t app_logic_telemetry_ReportWarningSgm(uint8_t u8Sensor,uint8_t u8CloseError, uint8_t u8AntiStuck, uint8_t u8Src, const char *pcSrcId);
+
 #endif

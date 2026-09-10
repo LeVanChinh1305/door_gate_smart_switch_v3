@@ -48,6 +48,13 @@ void app_logic_extra_config_ScheduleNextRFLock(void);
  */
 void app_logic_extra_config_StartAntiAnimalWindow(void);
 
+
+/**
+ * @brief Kiểm tra xem hiện tại có đang trong khung giờ Cảnh báo ban đêm hay không.
+ * @return true nếu tính năng warningEnb BẬT và thời gian thực nằm trong khoảng warningBegin -> warningEnd.
+ */
+bool app_logic_extra_config_IsWarningNightActive(void);
+
 #ifdef __cplusplus
 }
 #endif

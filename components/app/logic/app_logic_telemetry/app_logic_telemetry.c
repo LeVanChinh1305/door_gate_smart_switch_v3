@@ -201,3 +201,61 @@ esp_err_t app_logic_telemetry_ReportSensorHistory(const app_logic_sensor_history
     cJSON_free(pJsonOut);
     return (i32MsgId >= 0) ? ESP_OK : ESP_FAIL;
 }
+
+
+esp_err_t app_logic_telemetry_ReportWarningSgm(uint8_t u8Sensor, uint8_t u8CloseError,  uint8_t u8AntiStuck, uint8_t u8Src, const char *pcSrcId)
+{
+    const app_nvs_device_config_t *pDevCfg = app_mqtt_GetDeviceConfig();
+    esp_mqtt_client_handle_t xMqttClient = app_mqtt_GetClient();
+
+    if ((xMqttClient == NULL) || !app_mqtt_IsConnected()) {
+        ESP_LOGE(TAG, "MQTT chưa kết nối, hủy gửi ReportWarningSgm");
+        return ESP_FAIL;
+    }
+
+    cJSON *pRoot = cJSON_CreateObject();
+    if (pRoot == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    (void)cJSON_AddStringToObject(pRoot, "name", "ReportWarningSgm");
+    (void)cJSON_AddNumberToObject(pRoot, "devT", (double)pDevCfg->dev_type);
+    (void)cJSON_AddStringToObject(pRoot, "devExtAddr", pDevCfg->dev_ext_addr);
+    (void)cJSON_AddNumberToObject(pRoot, "timeStamp", (double)get_current_timestamp_ms());
+
+    cJSON *pDevVArray = cJSON_CreateArray();
+    if (pDevVArray != NULL) {
+        cJSON *pItem = cJSON_CreateObject();
+        if (pItem != NULL) {
+            (void)cJSON_AddNumberToObject(pItem, "sensor", (double)u8Sensor);
+            (void)cJSON_AddNumberToObject(pItem, "closeError", (double)u8CloseError);
+            (void)cJSON_AddNumberToObject(pItem, "antiStuck", (double)u8AntiStuck);
+            (void)cJSON_AddNumberToObject(pItem, "src", (double)u8Src);
+            
+            const char *pcActualSrcId = ((pcSrcId != NULL) && (strlen(pcSrcId) > 0U)) ? pcSrcId : pDevCfg->dev_ext_addr;
+            (void)cJSON_AddStringToObject(pItem, "srcId", pcActualSrcId);
+            
+            cJSON_AddItemToArray(pDevVArray, pItem);
+        }
+        cJSON_AddItemToObject(pRoot, "devV", pDevVArray);
+    }
+
+    char *pJsonOut = cJSON_PrintUnformatted(pRoot);
+    cJSON_Delete(pRoot);
+
+    if (pJsonOut == NULL) {
+        ESP_LOGE(TAG, "Tạo JSON ReportWarningSgm thất bại");
+        return ESP_FAIL;
+    }
+
+    /* Gửi trực tiếp lên Topic Alert (pDevCfg->mqtt_alert) */
+    int i32MsgId = esp_mqtt_client_publish(xMqttClient, pDevCfg->mqtt_alert, pJsonOut, 0, 1, 0);
+    if (i32MsgId >= 0) {
+        ESP_LOGI(TAG, "Đã gửi ReportWarningSgm (msg_id=%d) lên topic [%s]: %s", i32MsgId, pDevCfg->mqtt_alert, pJsonOut);
+    } else {
+        ESP_LOGE(TAG, "Gửi ReportWarningSgm thất bại (msg_id=%d)", i32MsgId);
+    }
+
+    cJSON_free(pJsonOut);
+    return (i32MsgId >= 0) ? ESP_OK : ESP_FAIL;
+}

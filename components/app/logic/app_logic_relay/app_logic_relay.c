@@ -13,6 +13,8 @@
 #include "app_logic_mqtt_publisher.h"
 #include "app_nvs.h"
 #include "app_logic_telemetry.h"
+#include "app_logic_extra_config.h"
+#include "app_led_state.h"
 
 static const char *TAG = "APP_LOGIC_RELAY";
 
@@ -269,27 +271,38 @@ esp_err_t app_logic_relay_SendMsg(const app_logic_relay_msg_t *pMsg)
 
 esp_err_t app_logic_relay_Open(void)
 {
-  app_logic_relay_msg_t sMsg = {
-    .eCmd = E_APP_LOGIC_RELAY_CMD_OPEN,
-    .u32PulseDurationMs = 0U,
-    .bForceOverride = false
-  };
-  g_u8TargetLevel = 100U;  
-  g_i8Direction = 1;
-  return app_logic_relay_SendMsg(&sMsg);
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_OPEN,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+    g_u8TargetLevel = 100U;  
+    g_i8Direction = 1;
+    /* KIỂM TRA TÍNH NĂNG CẢNH BÁO BAN ĐÊM (Áp dụng cho mọi nguồn Mở cửa) */
+    if (app_logic_extra_config_IsWarningNightActive()) {
+        ESP_LOGW(TAG, ">>> CẢNH BÁO BAN ĐÊM: Phát hiện cửa mở trong khung giờ bảo vệ!");
+
+        /* 1. Báo động còi & Nháy LED đỏ tại chỗ */
+        // app_logic_buzzer_BeepWarning();
+        app_led_state_SetState(E_LED_STATE_WARNING);
+
+        /* 2. Gửi bản tin ReportWarningSgm (sensor=1) lên Topic Alert (mqtt_alert) */
+        (void)app_logic_telemetry_ReportWarningSgm(1, 0, 0, 14, NULL);
+    }
+    return app_logic_relay_SendMsg(&sMsg);
 }
 
 esp_err_t app_logic_relay_Close(void)
 {
-  app_logic_relay_msg_t sMsg = {
-    .eCmd = E_APP_LOGIC_RELAY_CMD_CLOSE,
-    .u32PulseDurationMs = 0U,
-    .bForceOverride = false
-  };
-  g_u8TargetLevel = 0U;    
-  g_i8Direction = -1;
-  return app_logic_relay_SendMsg(&sMsg);
-}
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_CLOSE,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+    g_u8TargetLevel = 0U;    
+    g_i8Direction = -1;
+    return app_logic_relay_SendMsg(&sMsg);
+    }
 
 esp_err_t app_logic_relay_Stop(void)
 {
