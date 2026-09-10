@@ -300,15 +300,20 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
     }
 
     // Kiểm tra nếu có bất kỳ kênh nào set control_mode = 3 (DISABLE TOUCH)
-    if ((g_sExtraConfig.gate_1_control_mode == 3) || 
-        (g_sExtraConfig.gate_2_control_mode == 3) || 
-        (g_sExtraConfig.gate_3_control_mode == 3) ) 
+    if ((cJSON_GetObjectItem(pValue, "gate_1_control_mode") != NULL) ||
+        (cJSON_GetObjectItem(pValue, "gate_2_control_mode") != NULL) ||
+        (cJSON_GetObjectItem(pValue, "gate_3_control_mode") != NULL))
     {
-        app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, true);
-        ESP_LOGI(TAG, ">>> ĐÃ BẬT KHÓA TRẺ EM: Vô hiệu hóa nút bấm cảm ứng vật lý (DISABLE TOUCH)!");
-    } else {
-        app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, false);
-        ESP_LOGI(TAG, ">>> ĐÃ TẮT KHÓA TRẺ EM: Nút bấm cảm ứng hoạt động bình thường.");
+        if ((g_sExtraConfig.gate_1_control_mode == 3) || 
+            (g_sExtraConfig.gate_2_control_mode == 3) || 
+            (g_sExtraConfig.gate_3_control_mode == 3)) 
+        {
+            app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, true);
+            ESP_LOGI(TAG, ">>> ĐÃ BẬT KHÓA TRẺ EM: Vô hiệu hóa nút bấm cảm ứng vật lý (DISABLE TOUCH)!");
+        } else {
+            app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, false);
+            ESP_LOGI(TAG, ">>> ĐÃ TẮT KHÓA TRẺ EM: Nút bấm cảm ứng hoạt động bình thường.");
+        }
     }
 
     /* Lưu vào NVS nếu có bất kỳ biến nào bị thay đổi so với cấu hình hiện tại */
