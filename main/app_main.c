@@ -42,6 +42,13 @@ void app_main(void) {
   }
   ESP_LOGI(TAG, "Khởi tạo NVS thành công!");
   eRet = app_nvs_LoadExtraConfig(&g_sExtraConfig);
+  if (app_nvs_LoadExtraConfig(&g_sExtraConfig) == ESP_OK) {
+    if ((g_sExtraConfig.gate_1_control_mode == 3) || (g_sExtraConfig.gate_2_control_mode == 3) || (g_sExtraConfig.gate_3_control_mode == 3)) 
+    {
+      app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, true);
+      ESP_LOGI("APP_MAIN", "Đã khôi phục trạng thái KHÓA TRẺ EM từ NVS!");
+    }
+  }
   if (eRet == ESP_OK) {
     ESP_LOGI(TAG, "Nạp Extra Config từ NVS vào RAM thành công");
     /* Kiểm tra và bật cờ DEVICE_MODE_LOCKED_RF nếu đang trong khung giờ khóa */

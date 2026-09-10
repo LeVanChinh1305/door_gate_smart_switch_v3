@@ -10,12 +10,12 @@
 #include <time.h>
 #include "app_device_state.h"
 
-static const char *TAG = "APP_LOGIC_EXTRA_CFG";
+static const char *TAG = "APP_LOGIC_EXTRA_CONFIG";
 /* Biến Timer tĩnh quản lý lịch bật/tắt Khóa RF */
 static TimerHandle_t g_hLockRFTimer = NULL;
 // biến quản lý khóa tạm thời 
 static TimerHandle_t g_hAntiAnimalTimer = NULL;
-
+static char s_acExtraCfgResponseBuffer[1024];
 /**
  * @brief Callback hết thời gian mở cửa sổ thao tác -> TỰ ĐỘNG KHÓA LẠI
  */
@@ -129,21 +129,24 @@ void app_logic_extra_config_ScheduleNextRFLock(void)
     xTimerStart(g_hLockRFTimer, 0);
 }
 
+/* In file: app_logic_extra_config.c -> app_logic_extra_config_ProcessGet() */
+
 void app_logic_extra_config_ProcessGet(char *pcOutBuffer, size_t zMaxLen)
 {
     if (pcOutBuffer == NULL || zMaxLen == 0) {
         return;
     }
 
-    /* Lấy địa chỉ MAC để điền vào JSON */
     app_nvs_device_config_t sDevConfig;
     char acMac[DF_APP_STORAGE_DEV_EXT_ADDR_SIZE] = "UNKNOWN";
     if (app_nvs_LoadDeviceConfig(&sDevConfig) == ESP_OK) {
         snprintf(acMac, sizeof(acMac), "%s", sDevConfig.dev_ext_addr);
     }
 
-    /* Định dạng trực tiếp dữ liệu cấu hình vào mảng bằng snprintf */
-    snprintf(pcOutBuffer, zMaxLen,
+    int iOffset = 0;
+
+    /* ĐỢT 1: Thông tin chung & Cấu hình Cổng 1 + Cổng 2 */
+    iOffset = snprintf(pcOutBuffer, zMaxLen,
         "{"
         "\"name\":\"CmdSetExtraConfig\","
         "\"devT\":3097,"
@@ -162,48 +165,62 @@ void app_logic_extra_config_ProcessGet(char *pcOutBuffer, size_t zMaxLen)
         "\"gate_2_control_mode\":%d,"
         "\"gate_2_led_off\":%d,"
         "\"gate_2_rgb_on\":%lu,"
-        "\"gate_2_rgb_off\":%lu,"
-        "\"gate_3_type\":%d,"
-        "\"gate_3_control_mode\":%d,"
-        "\"gate_3_led_off\":%d,"
-        "\"gate_3_rgb_on\":%lu,"
-        "\"gate_3_rgb_off\":%lu,"
-        "\"nightModeEnb\":%d,"
-        "\"nightBegin\":%lu,"
-        "\"nightEnd\":%lu,"
-        "\"nightTz\":%d,"
-        "\"warningEnb\":%d,"
-        "\"warningBegin\":%lu,"
-        "\"warningEnd\":%lu,"
-        "\"switch_1_lightness\":%d,"
-        "\"switch_2_lightness\":%d,"
-        "\"switch_3_lightness\":%d,"
-        "\"anti_animal_enb\":%d,"
-        "\"anti_animal_lock_time\":%lu,"
-        "\"gate_countdown\":%lu,"
-        "\"sgmCycle\":%lu,"
-        "\"sgmCycleGap\":%lu,"
-        "\"sgmUseCycleGap\":%d,"
-        "\"resetMode\":%d,"
-        "\"wlanMode\":%d,"
-        "\"lockRFEnb\":%d,"
-        "\"lockRFBegin\":%lu,"
-        "\"lockRFEnd\":%lu"
-        "}",
+        "\"gate_2_rgb_off\":%lu,",
         acMac,
         g_sExtraConfig.buzzerEnb, g_sExtraConfig.ledEnb, g_sExtraConfig.ledRgbOn, g_sExtraConfig.ledRgbOff, g_sExtraConfig.led_lightness,
         g_sExtraConfig.gate_1_type, g_sExtraConfig.gate_1_control_mode, g_sExtraConfig.gate_1_led_off, g_sExtraConfig.gate_1_rgb_on, g_sExtraConfig.gate_1_rgb_off,
-        g_sExtraConfig.gate_2_type, g_sExtraConfig.gate_2_control_mode, g_sExtraConfig.gate_2_led_off, g_sExtraConfig.gate_2_rgb_on, g_sExtraConfig.gate_2_rgb_off,
-        g_sExtraConfig.gate_3_type, g_sExtraConfig.gate_3_control_mode, g_sExtraConfig.gate_3_led_off, g_sExtraConfig.gate_3_rgb_on, g_sExtraConfig.gate_3_rgb_off,
-        g_sExtraConfig.nightModeEnb, g_sExtraConfig.nightBegin, g_sExtraConfig.nightEnd, g_sExtraConfig.nightTz,
-        g_sExtraConfig.warningEnb, g_sExtraConfig.warningBegin, g_sExtraConfig.warningEnd,
-        g_sExtraConfig.switch_1_lightness, g_sExtraConfig.switch_2_lightness, g_sExtraConfig.switch_3_lightness,
-        g_sExtraConfig.anti_animal_enb, g_sExtraConfig.anti_animal_lock_time, g_sExtraConfig.gate_countdown,
-        g_sExtraConfig.sgmCycle, g_sExtraConfig.sgmCycleGap, g_sExtraConfig.sgmUseCycleGap,
-        g_sExtraConfig.resetMode, g_sExtraConfig.wlanMode, g_sExtraConfig.lockRFEnb, g_sExtraConfig.lockRFBegin, g_sExtraConfig.lockRFEnd
+        g_sExtraConfig.gate_2_type, g_sExtraConfig.gate_2_control_mode, g_sExtraConfig.gate_2_led_off, g_sExtraConfig.gate_2_rgb_on, g_sExtraConfig.gate_2_rgb_off
     );
-}
 
+    /* ĐỢT 2: Cấu hình Cổng 3, Ban đêm & Cảnh báo */
+    if (iOffset > 0 && (size_t)iOffset < zMaxLen) {
+        int iNext = snprintf(pcOutBuffer + iOffset, zMaxLen - (size_t)iOffset,
+            "\"gate_3_type\":%d,"
+            "\"gate_3_control_mode\":%d,"
+            "\"gate_3_led_off\":%d,"
+            "\"gate_3_rgb_on\":%lu,"
+            "\"gate_3_rgb_off\":%lu,"
+            "\"nightModeEnb\":%d,"
+            "\"nightBegin\":%lu,"
+            "\"nightEnd\":%lu,"
+            "\"nightTz\":%d,"
+            "\"warningEnb\":%d,"
+            "\"warningBegin\":%lu,"
+            "\"warningEnd\":%lu,"
+            "\"switch_1_lightness\":%d,"
+            "\"switch_2_lightness\":%d,"
+            "\"switch_3_lightness\":%d,",
+            g_sExtraConfig.gate_3_type, g_sExtraConfig.gate_3_control_mode, g_sExtraConfig.gate_3_led_off, g_sExtraConfig.gate_3_rgb_on, g_sExtraConfig.gate_3_rgb_off,
+            g_sExtraConfig.nightModeEnb, g_sExtraConfig.nightBegin, g_sExtraConfig.nightEnd, g_sExtraConfig.nightTz,
+            g_sExtraConfig.warningEnb, g_sExtraConfig.warningBegin, g_sExtraConfig.warningEnd,
+            g_sExtraConfig.switch_1_lightness, g_sExtraConfig.switch_2_lightness, g_sExtraConfig.switch_3_lightness
+        );
+        if (iNext > 0) {
+            iOffset += iNext;
+        }
+    }
+
+    /* ĐỢT 3: Anti Animal, SGM & Lock RF (Kết thúc JSON) */
+    if (iOffset > 0 && (size_t)iOffset < zMaxLen) {
+        (void)snprintf(pcOutBuffer + iOffset, zMaxLen - (size_t)iOffset,
+            "\"anti_animal_enb\":%d,"
+            "\"anti_animal_lock_time\":%lu,"
+            "\"gate_countdown\":%lu,"
+            "\"sgmCycle\":%lu,"
+            "\"sgmCycleGap\":%lu,"
+            "\"sgmUseCycleGap\":%d,"
+            "\"resetMode\":%d,"
+            "\"wlanMode\":%d,"
+            "\"lockRFEnb\":%d,"
+            "\"lockRFBegin\":%lu,"
+            "\"lockRFEnd\":%lu"
+            "}",
+            g_sExtraConfig.anti_animal_enb, g_sExtraConfig.anti_animal_lock_time, g_sExtraConfig.gate_countdown,
+            g_sExtraConfig.sgmCycle, g_sExtraConfig.sgmCycleGap, g_sExtraConfig.sgmUseCycleGap,
+            g_sExtraConfig.resetMode, g_sExtraConfig.wlanMode, g_sExtraConfig.lockRFEnb, g_sExtraConfig.lockRFBegin, g_sExtraConfig.lockRFEnd
+        );
+    }
+}
 
 void app_logic_extra_config_ProcessSet(const cJSON *pValue)
 {
@@ -282,6 +299,18 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
         }
     }
 
+    // Kiểm tra nếu có bất kỳ kênh nào set control_mode = 3 (DISABLE TOUCH)
+    if ((g_sExtraConfig.gate_1_control_mode == 3) || 
+        (g_sExtraConfig.gate_2_control_mode == 3) || 
+        (g_sExtraConfig.gate_3_control_mode == 3) ) 
+    {
+        app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, true);
+        ESP_LOGI(TAG, ">>> ĐÃ BẬT KHÓA TRẺ EM: Vô hiệu hóa nút bấm cảm ứng vật lý (DISABLE TOUCH)!");
+    } else {
+        app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, false);
+        ESP_LOGI(TAG, ">>> ĐÃ TẮT KHÓA TRẺ EM: Nút bấm cảm ứng hoạt động bình thường.");
+    }
+
     /* Lưu vào NVS nếu có bất kỳ biến nào bị thay đổi so với cấu hình hiện tại */
     esp_err_t eErr = ESP_OK;
     if (bConfigChanged) {
@@ -294,30 +323,12 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
     } else {
         ESP_LOGI(TAG, "Cấu hình không có thay đổi, bỏ qua việc lưu NVS");
     }
-    /* ĐÓNG GÓI BẢN TIN PHẢN HỒI (ACK) ĐỂ TRÁNH SERVER TRUYỀN LẠI (RETRY) */
-    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
-    if (psConfig != NULL) {
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
+    (void)memset(s_acExtraCfgResponseBuffer, 0, sizeof(s_acExtraCfgResponseBuffer));
 
-        char acResponse[256];
-        snprintf(acResponse, sizeof(acResponse),
-                 "{"
-                 "\"name\":\"CmdSetExtraConfig\","
-                 "\"devT\":%u,"
-                 "\"devExtAddr\":\"%s\","
-                 "\"timeStamp\":%llu,"
-                 "\"errorCode\":%d"
-                 "}",
-                 (unsigned int)psConfig->dev_type,
-                 psConfig->dev_ext_addr,
-                 (unsigned long long)u64Timestamp,
-                 (eErr == ESP_OK) ? 50000 : 50005);
+    app_logic_extra_config_ProcessGet(s_acExtraCfgResponseBuffer, sizeof(s_acExtraCfgResponseBuffer));
 
-        (void)app_logic_mqtt_publisher_SendResponse(acResponse);
-        ESP_LOGI(TAG, "Đã gửi phản hồi CmdSetExtraConfig (errorCode=%d)", (eErr == ESP_OK) ? 50000 : 50005);
-    }
+    /* Bắn bản tin hoàn chỉnh 600+ bytes lên Response Topic */
+    (void)app_logic_mqtt_publisher_SendResponse(s_acExtraCfgResponseBuffer);
 }
 
 

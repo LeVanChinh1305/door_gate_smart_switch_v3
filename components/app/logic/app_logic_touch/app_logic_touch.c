@@ -131,7 +131,7 @@ static void app_logic_touch_Task(void *pArg)
                             u8PrevStatus = u8CurrentStatus;
                             continue; /* Kết thúc ngay, không chạy Relay cửa */
                         }
-                        if (app_device_state_HasMode(DEVICE_MODE_LOCKED_RF) || app_device_state_HasMode(DEVICE_MODE_LOCKED_TEMP)) {
+                        if (app_device_state_HasMode(DEVICE_MODE_LOCKED_RF) || app_device_state_HasMode(DEVICE_MODE_LOCKED_TEMP)||app_device_state_HasMode(DEVICE_MODE_LOCKED_CHILD)) {
                             ESP_LOGW(TAG, "Thiết bị đang trong khung giờ KHÓA NGOẠI VI! Bỏ qua lệnh bấm nút (0x%02X)", u8PressedBtn);
                             
                             /* (Tùy chọn) Kêu còi báo hiệu từ chối thao tác */
