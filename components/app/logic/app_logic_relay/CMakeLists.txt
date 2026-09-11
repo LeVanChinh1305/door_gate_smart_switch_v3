@@ -11,4 +11,5 @@ idf_component_register(
         app_logic_telemetry
         app_logic_extra_config
         app_led_state
+        app_zero_cross
 )

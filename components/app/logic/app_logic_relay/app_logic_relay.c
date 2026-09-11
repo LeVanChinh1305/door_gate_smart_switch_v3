@@ -10,6 +10,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "app_zero_cross.h"
 #include "app_logic_mqtt_publisher.h"
 #include "app_nvs.h"
 #include "app_logic_telemetry.h"
@@ -21,6 +23,7 @@ static const char *TAG = "APP_LOGIC_RELAY";
 
 static QueueHandle_t g_hRelayCommandQueue = NULL;
 static TaskHandle_t g_hRelayTask = NULL;
+static SemaphoreHandle_t g_hZcSemaphore = NULL;
 static bool g_bIsReady = false;
 
 
@@ -143,6 +146,54 @@ static void app_logic_relay_TrackingTask(void *arg) {
 }
 
 /**
+ * @brief  Callback được gọi từ ISR khi phát hiện điểm 0V (Zero-Cross).
+ * @param  pArg Tham số truyền vào callback (không sử dụng).
+ */
+static void IRAM_ATTR prv_ZeroCrossIsrCallback(void *pArg)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    (void)pArg;
+
+    if (g_hZcSemaphore != NULL) {
+        xSemaphoreGiveFromISR(g_hZcSemaphore, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+/**
+ * @brief  Chờ tín hiệu Zero-Cross trước khi kích đóng/mở relay.
+ * @param  u32TimeoutMs Thời gian chờ tối đa (ms).
+ * @return bool: true nếu bắt được điểm 0 thành công, false nếu timeout (fallback).
+ */
+static bool prv_WaitForZeroCross(uint32_t u32TimeoutMs)
+{
+    if (g_hZcSemaphore == NULL) {
+        return false;
+    }
+
+    /* Xóa cờ semaphore còn sót trước đó nếu có */
+    (void)xSemaphoreTake(g_hZcSemaphore, 0U);
+
+    /* Bật cờ sẵn sàng đón ngắt điểm 0 */
+    esp_err_t ret = app_zero_cross_EnableWait();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Không thể bật cờ chờ Zero-Cross: %s", esp_err_to_name(ret));
+        return false;
+    }
+
+    /* Chờ tín hiệu từ ngắt ISR */
+    if (xSemaphoreTake(g_hZcSemaphore, pdMS_TO_TICKS(u32TimeoutMs)) == pdTRUE) {
+        ESP_LOGD(TAG, "Đã đồng bộ Zero-Cross thành công");
+        return true;
+    }
+
+    /* Timeout: Tắt cờ chờ và chạy chế độ degraded mode để không chặn dòng điều khiển */
+    (void)app_zero_cross_DisableWait();
+    ESP_LOGW(TAG, "ZCD timeout (%u ms), kích relay ở chế độ fallback", (unsigned int)u32TimeoutMs);
+    return false;
+}
+
+/**
  * @brief Task nhận và thực thi tuần tự các lệnh relay với logic bảo vệ an toàn.
  * @param pArg Tham số task (không sử dụng).
  */
@@ -179,6 +230,7 @@ static void app_logic_relay_Task(void *pArg)
                         vTaskDelay(pdMS_TO_TICKS(DF_INTERLOCK_DELAY_MS));
                     }
                     (void)app_relay_state_SetState(E_RELAY_STATE_OPENING);
+                    (void)prv_WaitForZeroCross(DF_ZCD_TIMEOUT_MS);
                     eErr = app_relay_TriggerPulse(E_RELAY_CMD_OPEN, u32PulseTime);
                     break;
 
@@ -190,6 +242,7 @@ static void app_logic_relay_Task(void *pArg)
                         vTaskDelay(pdMS_TO_TICKS(DF_INTERLOCK_DELAY_MS));
                     }
                     (void)app_relay_state_SetState(E_RELAY_STATE_CLOSING);
+                    (void)prv_WaitForZeroCross(DF_ZCD_TIMEOUT_MS);
                     eErr = app_relay_TriggerPulse(E_RELAY_CMD_CLOSE, u32PulseTime);
                     break;
 
@@ -235,12 +288,31 @@ esp_err_t app_logic_relay_Init(void)
         return eErr;
     }
 
+    /* 1. Tạo semaphore đồng bộ ngắt Zero-Cross */
+    if (g_hZcSemaphore == NULL) {
+        g_hZcSemaphore = xSemaphoreCreateBinary();
+        if (g_hZcSemaphore == NULL) {
+            ESP_LOGE(TAG, "Tạo semaphore Zero-Cross thất bại");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    /* 2. Khởi tạo driver Zero-Cross Detection */
+    esp_err_t eRetZcd = app_zero_cross_Init(prv_ZeroCrossIsrCallback, NULL);
+    if (eRetZcd != ESP_OK) {
+        ESP_LOGW(TAG, "Khởi tạo Zero-Cross thất bại: %s, tiếp tục chạy chế độ degraded", esp_err_to_name(eRetZcd));
+    }
+
+    /* 3. Tạo hàng đợi nhận lệnh relay */
     g_hRelayCommandQueue = xQueueCreate(DF_QUEUE_LENGTH_MEDIUM, sizeof(app_logic_relay_msg_t));
     if (g_hRelayCommandQueue == NULL) {
         ESP_LOGE(TAG, "Tạo hàng đợi lệnh relay thất bại");
+        vSemaphoreDelete(g_hZcSemaphore);
+        g_hZcSemaphore = NULL;
         return ESP_ERR_NO_MEM;
     }
 
+    /* 4. Tạo task thực thi relay */
     BaseType_t xTaskResult = xTaskCreate(app_logic_relay_Task,
                                          "relay_logic",
                                          DF_TASK_STACK_MEDIUM,
@@ -251,19 +323,25 @@ esp_err_t app_logic_relay_Init(void)
         ESP_LOGE(TAG, "Tạo task xử lý relay thất bại");
         vQueueDelete(g_hRelayCommandQueue);
         g_hRelayCommandQueue = NULL;
+        vSemaphoreDelete(g_hZcSemaphore);
+        g_hZcSemaphore = NULL;
         return ESP_ERR_NO_MEM;
     }
+
+    /* 5. Tạo task tracking hành trình */
     xTaskResult = xTaskCreate(app_logic_relay_TrackingTask,
-                                         "relay_tracking",
-                                         DF_TASK_STACK_NETWORK, 
-                                         NULL,
-                                         DF_TASK_PRIO_NORMAL,
-                                         NULL);
+                              "relay_tracking",
+                              DF_TASK_STACK_NETWORK, 
+                              NULL,
+                              DF_TASK_PRIO_NORMAL,
+                              NULL);
     if (xTaskResult != pdPASS) {
         ESP_LOGE(TAG, "Tạo task tracking relay thất bại");
         vQueueDelete(g_hRelayCommandQueue);
         vTaskDelete(g_hRelayTask);
         g_hRelayCommandQueue = NULL;
+        vSemaphoreDelete(g_hZcSemaphore);
+        g_hZcSemaphore = NULL;
         return ESP_ERR_NO_MEM;
     }
 
