@@ -5,6 +5,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_task_wdt.h"
 
 #include "app_blufi.h"
 #include "app_device_state.h"
@@ -30,7 +31,26 @@ static bool s_bIsBlufiInited = false;
 static bool s_bIsUdpInited = false; 
 
 void app_main(void) {
-  vTaskDelay(pdMS_TO_TICKS(10000));
+  /* Kiểm tra nguyên nhân khởi động lại (đặc biệt là do Task Watchdog) */
+  esp_reset_reason_t eResetReason = esp_reset_reason();
+  if (eResetReason == ESP_RST_TASK_WDT) {
+    ESP_LOGE(TAG, "=======================================================");
+    ESP_LOGE(TAG, ">>> CẢNH BÁO: HỆ THỐNG VỪA RESET BỞI TASK WATCHDOG (TWDT)! <<<");
+    ESP_LOGE(TAG, "=======================================================");
+  } else {
+    ESP_LOGI(TAG, "Lý do khởi động lại: %d", (int)eResetReason);
+  }
+
+  esp_task_wdt_config_t sTwdtConfig = {
+        .timeout_ms = 5000,                               /* Timeout 5 giây */
+        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,  /* Giám sát Idle Task trên mọi Core */
+        .trigger_panic = true                             /* Tự động Reset ESP32 khi bị treo */
+    };
+    
+    /* Nạp cấu hình TWDT */
+  ESP_ERROR_CHECK(esp_task_wdt_reconfigure(&sTwdtConfig));
+    
+  ESP_LOGI("MAIN", "Đã khởi tạo Task Watchdog Timer (TWDT) 5s thành công.");
 
   ESP_LOGI(TAG, "=== BẮT ĐẦU KIỂM TRA KHỞI TẠO NVS ===");
 
@@ -182,8 +202,13 @@ void app_main(void) {
 
   ESP_LOGI(TAG, "=== HỆ THỐNG ĐÃ KHỞI ĐỘNG HOÀN TẤT ===");
 
+  /* Đăng ký task chính app_main vào TWDT sau khi hoàn tất khởi động mạng và các module */
+  ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
   // Vòng lặp chính của app_main (giữ task chính hoạt động)
   while (true) {
+    esp_task_wdt_reset();
+
     /* 1. Kích hoạt BluFi khi ở mode CONNECT_AUTO và chưa Init */
     if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
       if (!s_bIsBlufiInited) {

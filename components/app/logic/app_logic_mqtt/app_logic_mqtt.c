@@ -23,6 +23,7 @@
 #include <time.h>
 #include "app_logic_telemetry.h"
 #include "app_nvs.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "APP_LOGIC_MQTT";
 
@@ -453,8 +454,14 @@ static void app_logic_mqtt_Task(void *pArg)
     DF_UNUSED(pArg);
     app_logic_mqtt_queue_item_t sItem;
 
+    /* Đăng ký task MQTT vào TWDT */
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
     while (true) {
-        if (xQueueReceive(g_xMqttQueue, &sItem, portMAX_DELAY) == pdPASS) {
+        esp_task_wdt_reset();
+
+        /* Chờ bản tin từ Queue tối đa 2 giây để định kỳ feed TWDT */
+        if (xQueueReceive(g_xMqttQueue, &sItem, pdMS_TO_TICKS(2000U)) == pdPASS) {
             if ( sItem.u32DataLen > 0U) {
                 /* Parse chuỗi JSON payload nhận được từ hàng đợi */
                 cJSON *jsRoot = cJSON_Parse(sItem.acData);

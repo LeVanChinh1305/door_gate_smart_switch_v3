@@ -20,6 +20,7 @@
 #include "app_logic_mqtt_publisher.h"
 #include "app_mqtt.h"
 #include "app_logic_extra_config.h"
+#include "esp_task_wdt.h"
 
 
 static const char *TAG = "APP_LOGIC_TOUCH";
@@ -51,7 +52,13 @@ static void app_logic_touch_Task(void *pArg)
 
     ESP_LOGI(TAG, "Bắt đầu vòng lặp quét (Polling) Cảm ứng...");
 
+    /* Đăng ký task cảm ứng vào Task Watchdog Timer */
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
     while (true) {
+        /* Định kỳ feed Watchdog mỗi chu kỳ 50ms */
+        esp_task_wdt_reset();
+
         /* 1. Nhận lệnh từ Queue với timeout chính là chu kỳ quét (50ms) */
         if (xQueueReceive(g_hTouchCommandQueue, &eCommand, pdMS_TO_TICKS(DF_TOUCH_POLL_PERIOD_MS)) == pdPASS) {
             /* Xử lý các lệnh từ bên ngoài (nếu có) */

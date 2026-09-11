@@ -15,6 +15,7 @@
 #include "app_logic_telemetry.h"
 #include "app_logic_extra_config.h"
 #include "app_led_state.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "APP_LOGIC_RELAY";
 
@@ -86,7 +87,13 @@ void app_logic_relay_UpdateAppUI(void) {
 
 static void app_logic_relay_TrackingTask(void *arg) {
     uint8_t u8LastReportLevel = 255U; 
+
+    /* Đăng ký task tracking hành trình cửa vào TWDT */
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
     while (1) {
+        esp_task_wdt_reset();
+
         if (g_i8Direction != 0) {
             uint32_t u32TimePerOnePercentMs = g_sExtraConfig.sgmCycle * 10U; 
             if (u32TimePerOnePercentMs == 0U) {
@@ -144,8 +151,14 @@ static void app_logic_relay_Task(void *pArg)
     app_logic_relay_msg_t sMsg;
     (void)pArg;
 
+    /* Đăng ký task thực thi relay vào TWDT */
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
     while (true) {
-        if (xQueueReceive(g_hRelayCommandQueue, &sMsg, portMAX_DELAY) == pdPASS) {
+        esp_task_wdt_reset();
+
+        /* Đợi lệnh với timeout 2 giây để định kỳ feed Watchdog */
+        if (xQueueReceive(g_hRelayCommandQueue, &sMsg, pdMS_TO_TICKS(2000U)) == pdPASS) {
             e_relay_state_t eCurrentState = app_relay_state_GetState();
 
             // Kiểm tra an toàn: Nếu đang bị khóa mà không phải cờ cưỡng chế (ForceOverride) thì bỏ qua

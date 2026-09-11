@@ -11,6 +11,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_task_wdt.h"
 
 static const char *TAG = "APP_LED_STATE";
 
@@ -54,7 +55,11 @@ static void app_led_state_Task(void *pArg) {
   (void)pArg;
   bool bToggle = false;
 
+  esp_task_wdt_add(NULL);
+
   while (g_bTaskRunning) {
+    esp_task_wdt_reset();
+
     switch (g_eCurrentState) {
     case E_LED_STATE_UNCONNECTED:
       if (bToggle) {
@@ -100,7 +105,7 @@ static void app_led_state_Task(void *pArg) {
       break;
 
     case E_LED_STATE_WARNING:
-      /* Cảnh báo: Nhấp nháy đỏ liên tục tốc độ cao */
+      // Cảnh báo: Nhấp nháy đỏ liên tục tốc độ cao 
       if (bToggle) {
         (void)app_logic_led_SetColor(APP_LED_COLOR_RED);
       } else {
@@ -109,8 +114,7 @@ static void app_led_state_Task(void *pArg) {
       vTaskDelay(pdMS_TO_TICKS(200U));
       break;
     case E_LED_STATE_GATE_UP: {
-      /* Relay OPEN đang bật: LED OPEN (pixel 2) = màu bật, 2 LED còn lại = màu
-       * tắt */
+      // Relay OPEN đang bật: LED OPEN (pixel 2) = màu bật, 2 LED còn lại = màu tắt 
       app_led_color_t sColorOn = s_unpack_rgb(g_sExtraConfig.ledRgbOn);
       app_led_color_t sColorOff = s_unpack_rgb(g_sExtraConfig.ledRgbOff);
       (void)app_logic_led_SetPixelColor(0, sColorOff); // CLOSE relay: tắt
@@ -122,8 +126,7 @@ static void app_led_state_Task(void *pArg) {
     }
 
     case E_LED_STATE_GATE_DOWN: {
-      /* Relay CLOSE đang bật: LED CLOSE (pixel 0) = màu bật, 2 LED còn lại =
-       * màu tắt */
+      // Relay CLOSE đang bật: LED CLOSE (pixel 0) = màu bật, 2 LED còn lại = màu tắt 
       app_led_color_t sColorOn = s_unpack_rgb(g_sExtraConfig.ledRgbOn);
       app_led_color_t sColorOff = s_unpack_rgb(g_sExtraConfig.ledRgbOff);
       (void)app_logic_led_SetPixelColor(0, sColorOn);  // CLOSE relay: bật
@@ -135,7 +138,7 @@ static void app_led_state_Task(void *pArg) {
     }
 
     case E_LED_STATE_GATE_STOP: {
-      /* Tất cả relay đều tắt sau khi dừng: cả 3 LED hiện màu tắt */
+      // Tất cả relay đều tắt sau khi dừng: cả 3 LED hiện màu tắt 
       app_led_color_t sColorOff = s_unpack_rgb(g_sExtraConfig.ledRgbOff);
       app_led_color_t sColorOn = s_unpack_rgb(g_sExtraConfig.ledRgbOn);
       (void)app_logic_led_SetPixelColor(0, sColorOff); // CLOSE relay: tắt
@@ -145,22 +148,20 @@ static void app_led_state_Task(void *pArg) {
       vTaskDelay(pdMS_TO_TICKS(500U));
       break;
     }
-
     case E_LED_STATE_NORMAL:
-      /* Chế độ bình thường: Áp dụng toàn bộ cấu hình LED (brightness + màu
-       * ON/OFF theo relay state) */
+      // Chế độ bình thường: Áp dụng toàn bộ cấu hình LED (brightness + màu ON/OFF theo relay state) 
       s_apply_led_from_extra_config();
       vTaskDelay(pdMS_TO_TICKS(2000U));
       break;
     default:
-      /* Trạng thái bình thường: sáng nhẹ hoặc tắt tùy thiết kế */
+      // Trạng thái bình thường: sáng nhẹ hoặc tắt tùy thiết kế 
       (void)app_logic_led_SetColor(APP_LED_COLOR_OFF);
       vTaskDelay(pdMS_TO_TICKS(2000U));
       break;
     }
     bToggle = !bToggle;
   }
-
+  esp_task_wdt_delete(NULL);
   vTaskDelete(NULL);
 }
 
@@ -197,4 +198,6 @@ esp_err_t app_led_state_SetState(e_led_device_state_t eState) {
   return ESP_OK;
 }
 
-e_led_device_state_t app_led_state_GetState(void) { return g_eCurrentState; }
+e_led_device_state_t app_led_state_GetState(void) { 
+  return g_eCurrentState; 
+}

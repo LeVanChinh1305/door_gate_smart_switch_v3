@@ -8,8 +8,9 @@
 #include <string.h>
 #include "app_logic_telemetry.h"
 #include "app_mqtt.h"
+#include "esp_task_wdt.h"
 
-#define DF_APP_LOGIC_SCHEDULE_POLLING 5000U
+#define DF_APP_LOGIC_SCHEDULE_POLLING 2000U
 static const char *TAG = "APP_SCHEDULE";
 
 static void app_schedule_task(void *pArg)
@@ -18,7 +19,12 @@ static void app_schedule_task(void *pArg)
     app_schedule_item_t asSchedules[DF_MAX_SCHEDULES];
     uint8_t u8Count = 0;
 
+    /* Đăng ký task lịch trình vào TWDT */
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
     while(1) {
+        esp_task_wdt_reset();
+
         time_t xNow;
         struct tm sTimeInfo;
         time(&xNow);
