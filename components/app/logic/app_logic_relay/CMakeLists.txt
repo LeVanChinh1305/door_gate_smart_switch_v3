@@ -12,4 +12,5 @@ idf_component_register(
         app_logic_extra_config
         app_led_state
         app_zero_cross
+        app_header2h
 )

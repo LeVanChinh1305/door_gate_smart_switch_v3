@@ -12,6 +12,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "app_zero_cross.h"
+#include "app_header2h.h"
 #include "app_logic_mqtt_publisher.h"
 #include "app_nvs.h"
 #include "app_logic_telemetry.h"
@@ -161,6 +162,27 @@ static void IRAM_ATTR prv_ZeroCrossIsrCallback(void *pArg)
 }
 
 /**
+ * @brief  Callback được gọi từ ISR khi mức logic cảm biến cửa (Header 2-pin) thay đổi.
+ * @param  i32Level Mức logic mới đọc được từ GPIO (0 = Đóng, 1 = Mở).
+ * @param  pArg     Tham số con trỏ tùy chọn (không sử dụng).
+ */
+static void IRAM_ATTR prv_Header2hIsrCallback(int i32Level, void *pArg)
+{
+    (void)pArg;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    if (g_hRelayCommandQueue != NULL) {
+        app_logic_relay_msg_t sMsg = {
+            .eCmd = E_APP_LOGIC_RELAY_CMD_SENSOR_STATE_CHANGED,
+            .u32PulseDurationMs = (uint32_t)i32Level,
+            .bForceOverride = true
+        };
+        (void)xQueueSendFromISR(g_hRelayCommandQueue, &sMsg, &xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+/**
  * @brief  Chờ tín hiệu Zero-Cross trước khi kích đóng/mở relay.
  * @param  u32TimeoutMs Thời gian chờ tối đa (ms).
  * @return bool: true nếu bắt được điểm 0 thành công, false nếu timeout (fallback).
@@ -261,6 +283,61 @@ static void app_logic_relay_Task(void *pArg)
                     (void)app_relay_state_SetState(E_RELAY_STATE_STOPPED);
                     break;
 
+                case E_APP_LOGIC_RELAY_CMD_SENSOR_STATE_CHANGED: {
+                    int i32SensorState = (int)sMsg.u32PulseDurationMs;
+                    ESP_LOGI(TAG, "Sự kiện cảm biến cửa (Header 2-Pin): state = %d (%s)",
+                             i32SensorState,
+                             (i32SensorState == DF_HEADER2H_STATE_CLOSED) ? "ĐÓNG HOÀN TOÀN" : "MỞ");
+
+                    if (i32SensorState == DF_HEADER2H_STATE_CLOSED) {
+                        /* 1. CẢM BIẾN BÁO CỬA ĐÃ ĐÓNG HOÀN TOÀN (0%) */
+                        if (g_i8Direction != 0) {
+                            /* Nếu motor đang chạy, kích dừng ngay lập tức để ngắt hành trình */
+                            (void)app_relay_TriggerPulse(E_RELAY_CMD_STOP, DF_RELAY_DEFAULT_PULSE_DURATION_MS);
+                            (void)app_relay_state_SetState(E_RELAY_STATE_STOPPED);
+                        }
+                        g_i8Direction = 0;
+                        g_u8CurrentLevel = 0U;
+                        g_u8TargetLevel = 0U;
+
+                        /* Báo cáo lịch sử trạng thái sensor lên Cloud (0 = đóng) */
+                        app_logic_sensor_history_item_t sSensorLog;
+                        sSensorLog.i64Time = 0;
+                        sSensorLog.u8SensorState = 0U;
+                        (void)app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1);
+
+                        app_logic_relay_UpdateAppUI();
+                        ESP_LOGI(TAG, "Đã cập nhật trạng thái: Cửa ĐÓNG HOÀN TOÀN (0%%)");
+                    } else {
+                        /* 2. CẢM BIẾN BÁO CỬA BỊ MỞ */
+                        bool bWasClosed = (g_u8CurrentLevel == 0U);
+
+                        if (bWasClosed && (g_i8Direction == 0)) {
+                            /* Cửa bị mở từ bên ngoài khi không có lệnh điều khiển từ thiết bị */
+                            g_u8CurrentLevel = 100U;
+                            g_u8TargetLevel = 100U;
+
+                            /* Báo cáo lịch sử sensor lên Cloud (1 = mở) */
+                            app_logic_sensor_history_item_t sSensorLog;
+                            sSensorLog.i64Time = 0;
+                            sSensorLog.u8SensorState = 1U;
+                            (void)app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1);
+
+                            /* Kiểm tra tính năng Cảnh báo ban đêm */
+                            if (app_logic_extra_config_IsWarningNightActive()) {
+                                ESP_LOGW(TAG, ">>> CẢNH BÁO BAN ĐÊM: Cảm biến phát hiện cửa mở!");
+                                app_logic_extra_config_TriggerBuzzerRepeat(100, 100, 3);
+                                app_led_state_SetState(E_LED_STATE_WARNING);
+                                (void)app_logic_telemetry_ReportWarningSgm(1, 0, 0, 14, NULL);
+                            }
+
+                            app_logic_relay_UpdateAppUI();
+                            ESP_LOGI(TAG, "Đã cập nhật trạng thái: Phát hiện cửa MỞ (100%%)");
+                        }
+                    }
+                    break;
+                }
+
                 default:
                     ESP_LOGW(TAG, "Mã lệnh relay không hợp lệ: %d", sMsg.eCmd);
                     eErr = ESP_ERR_INVALID_ARG;
@@ -269,9 +346,11 @@ static void app_logic_relay_Task(void *pArg)
 
             if (eErr != ESP_OK) {
                 ESP_LOGE(TAG, "Thực thi lệnh relay thất bại: %s", esp_err_to_name(eErr));
-            } else {
+            } else if (sMsg.eCmd != E_APP_LOGIC_RELAY_CMD_SENSOR_STATE_CHANGED) {
                 /* Phát tiếng còi bíp 50ms phản hồi khi relay được điều khiển */
                 app_logic_extra_config_TriggerBuzzer(50);
+            } else {
+                /* Không bíp khi chỉ là event sensor */
             }
         }
     }
@@ -312,10 +391,25 @@ esp_err_t app_logic_relay_Init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    /* 4. Tạo task thực thi relay */
+    /* 4. Khởi tạo driver cảm biến cửa Header 2-Pin (GPIO3) */
+    esp_err_t eRetHeader = app_header2h_Init(prv_Header2hIsrCallback, NULL);
+    if (eRetHeader != ESP_OK) {
+        ESP_LOGW(TAG, "Khởi tạo app_header2h thất bại: %s", esp_err_to_name(eRetHeader));
+    } else {
+        int i32InitLevel = DF_HEADER2H_STATE_OPENED;
+        if (app_header2h_Read(&i32InitLevel) == ESP_OK) {
+            g_u8CurrentLevel = (i32InitLevel == DF_HEADER2H_STATE_CLOSED) ? 0U : 100U;
+            g_u8TargetLevel = g_u8CurrentLevel;
+            ESP_LOGI(TAG, "Trạng thái cảm biến cửa ban đầu: %s (%u%%)",
+                     (i32InitLevel == DF_HEADER2H_STATE_CLOSED) ? "ĐÓNG" : "MỞ",
+                     (unsigned int)g_u8CurrentLevel);
+        }
+    }
+
+    /* 5. Tạo task thực thi relay (Dùng STACK_LARGE vì task gọi cJSON và MQTT Publish) */
     BaseType_t xTaskResult = xTaskCreate(app_logic_relay_Task,
                                          "relay_logic",
-                                         DF_TASK_STACK_MEDIUM,
+                                         DF_TASK_STACK_LARGE,
                                          NULL,
                                          DF_TASK_PRIO_CRITICAL,
                                          &g_hRelayTask);
@@ -328,7 +422,7 @@ esp_err_t app_logic_relay_Init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    /* 5. Tạo task tracking hành trình */
+    /* 6. Tạo task tracking hành trình */
     xTaskResult = xTaskCreate(app_logic_relay_TrackingTask,
                               "relay_tracking",
                               DF_TASK_STACK_NETWORK, 
