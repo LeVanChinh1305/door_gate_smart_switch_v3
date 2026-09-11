@@ -10,7 +10,7 @@
 #include <sys/time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "app_logic_extra_config.h"
+#include "app_logic_extra_config.h" 
 
 static const char *TAG = "APP_SNTP";
 
