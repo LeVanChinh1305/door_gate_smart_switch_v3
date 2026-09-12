@@ -441,6 +441,18 @@ void app_logic_extra_config_ProcessSet(const cJSON *pValue)
         }
     }
 
+    if (cJSON_IsNumber(cJSON_GetObjectItem(pValue, "sgmUseCycleGap"))) {
+        if (g_sExtraConfig.sgmUseCycleGap == 1) {
+            ESP_LOGI(TAG, "Chuyển sang chế độ cửa có ô thoáng");
+        } else {
+            ESP_LOGI(TAG, "Thoát khỏi chế độ cửa có ô thoáng");
+        }
+    }
+
+    if (cJSON_IsNumber(cJSON_GetObjectItem(pValue, "sgmCycleGap"))) {
+        ESP_LOGI(TAG, "Cập nhật thời gian khe thoáng sgmCycleGap = %lu giây", (unsigned long)g_sExtraConfig.sgmCycleGap);
+    }
+
     // Kiểm tra nếu có bất kỳ kênh nào set control_mode = 3 (DISABLE TOUCH)
     if ((cJSON_GetObjectItem(pValue, "gate_1_control_mode") != NULL) ||
         (cJSON_GetObjectItem(pValue, "gate_2_control_mode") != NULL) ||

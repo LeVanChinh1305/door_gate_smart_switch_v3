@@ -177,9 +177,6 @@ static void app_logic_touch_Task(void *pArg)
                                 app_logic_telemetry_BuildControlItem(&sLog, "gate_2", E_TELEMETRY_MODE_STOP, E_TELEMETRY_SRC_PHYSICAL_DEVICE, psConfig->dev_ext_addr, "");
                                 sLog.i32Value = (int32_t)u8StopLevel;
                                 (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
-
-                                /* Cập nhật UI thanh trượt trên App về mốc dừng thực tế */
-                                // (void)app_logic_mqtt_publisher_ReportGateData(0, 1, 0, u8StopLevel);
                             }
                         } else if ((u8PressedBtn & DF_TOUCH_BTN_CS7 ) != 0U) {
                             ESP_LOGI(TAG, "→ Lệnh: ĐÓNG (CS7)");

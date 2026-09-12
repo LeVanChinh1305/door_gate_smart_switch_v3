@@ -327,7 +327,7 @@ void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config)
   config->ledEnb = 1;
   config->ledRgbOn = 16711680;
   config->ledRgbOff = 255;
-  config->led_lightness = 100;
+  config->led_lightness = 20;
 
   config->gate_1_type = 1;
   config->gate_1_control_mode = 1;
@@ -347,12 +347,12 @@ void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config)
   config->gate_3_rgb_on = 862021;
   config->gate_3_rgb_off = 123456;
 
-  config->nightModeEnb = 1;
+  config->nightModeEnb = 0;
   config->nightBegin = 1638928504;
   config->nightEnd = 1638928504;
   config->nightTz = 7;
 
-  config->warningEnb = 1;
+  config->warningEnb = 0;
   config->warningBegin = 1638928504;
   config->warningEnd = 1638928504;
 
@@ -363,7 +363,7 @@ void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config)
   config->anti_animal_enb = 0;
   config->anti_animal_lock_time = 5;
   config->gate_countdown = 200;
-  config->sgmCycle = 60;
+  config->sgmCycle = 30;
   config->sgmCycleGap = 6;
   config->sgmUseCycleGap = 1;
 
@@ -373,6 +373,8 @@ void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config)
   config->lockRFBegin = 1638928504;
   config->lockRFEnd = 1638928504;
 }
+
+ 
 
 esp_err_t app_nvs_SaveExtraConfig(const app_extra_config_t *config)
 {

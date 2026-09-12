@@ -20,7 +20,7 @@ extern "C" {
 esp_err_t app_logic_mqtt_publisher_SendResponse(const char *pcPayload);
 
 
-esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gate2, uint8_t arg3, uint8_t currentLevel);
+esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gate2, uint8_t arg3, uint8_t currentLevel, uint8_t u8GateOpenGap);
 
 
 /**

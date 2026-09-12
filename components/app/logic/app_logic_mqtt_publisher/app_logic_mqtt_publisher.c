@@ -46,7 +46,7 @@ esp_err_t app_logic_mqtt_publisher_SendResponse(const char *pcPayload)
     return ESP_OK;
 }
 
-esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gate2, uint8_t u8Gate3, uint8_t u8CurrentLevel){
+esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gate2, uint8_t u8Gate3, uint8_t u8CurrentLevel, uint8_t u8GateOpenGap){
     const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
     if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
         return ESP_FAIL;
@@ -59,9 +59,14 @@ esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gat
              "{\"param\":\"gate_2\",\"value\":%u},"
              "{\"param\":\"gate_3\",\"value\":%u},"
              "{\"param\":\"open_level\",\"value\":%u},"
-             "{\"param\":\"gate_open_gap\",\"value\":0},"
+             "{\"param\":\"gate_open_gap\",\"value\":%u},"
              "{\"param\":\"sensor\",\"value\":1}]",
-             u8Gate1, u8Gate2, u8Gate3, u8CurrentLevel);
+                (unsigned int)u8Gate1, 
+                (unsigned int)u8Gate2, 
+                (unsigned int)u8Gate3, 
+                (unsigned int)u8CurrentLevel, 
+                (unsigned int)u8GateOpenGap);
+    ESP_LOGI(TAG, "Bản tin gửi lên: %s", acPlaintext);
 
     /* 2. Mã hóa chuỗi plaintext */
     uint8_t au8Ciphertext[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];

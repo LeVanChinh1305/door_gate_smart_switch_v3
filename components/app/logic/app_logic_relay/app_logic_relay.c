@@ -33,16 +33,85 @@ static SemaphoreHandle_t g_hZcSemaphore = NULL;
 static TimerHandle_t g_hSensorReenableTimer = NULL;
 static volatile bool g_bSensorDisabled = false;
 static bool g_bIsReady = false;
+static TimerHandle_t g_hVentilationGapTimer = NULL;
 
 
-/* Các biến quản lý vị trí cửa chuẩn MISRA C */
 static uint8_t g_u8CurrentLevel = 0U;      // 0 = Đóng hoàn toàn, 100 = Mở hoàn toàn
 static uint8_t g_u8TargetLevel = 0U;       // Mục tiêu muốn chạy đến
 static int8_t  g_i8Direction = 0;          // Hướng di chuyển: 1 (Lên), -1 (Xuống), 0 (Dừng)
+static uint8_t g_u8GateOpenGapState = 0U;  //  report điều khiển mở khe thoáng: 
+                                                        // 0: bỏ qua, 
+                                                        // 1 là mở thành công, 
+                                                        // 2 là cửa chưa đóng hết, 
+                                                        // 3 là không điều khiển được, 
+                                                        // 4 là cửa đang ở trạng thái khe thoáng, 
+                                                        // 5 là cửa đẫ đóng hoàn toàn
 
 
+/* Callback ngắt cửa khi hết thời gian hé khe thoáng */
+static void prv_VentilationGapTimerCb(TimerHandle_t xTimer)
+{
+    (void)xTimer;
+    ESP_LOGI(TAG, "Hết thời gian sgmCycleGap -> Tự động DỪNG cửa");
+    g_u8GateOpenGapState = 4U;
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_STOP,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+    (void)xQueueSendFromISR(g_hRelayCommandQueue, &sMsg, NULL);
+}
 
+esp_err_t app_logic_relay_OpenVentilationGap(void)
+{
+    /* 1. Nếu tính năng Ô thoáng bị TẮT -> Gán mã 0 (bỏ qua) */
+    if (g_sExtraConfig.sgmUseCycleGap == 0) {
+        ESP_LOGW(TAG, "Chế độ ô thoáng đang TẮT -> Báo mã 0");
+        g_u8GateOpenGapState = 0U;
+        return ESP_ERR_NOT_SUPPORTED;
+    }
 
+    /* 2. Nếu cửa chưa đóng hoàn toàn (g_u8CurrentLevel != 0%) -> Gán mã 2 (Cửa chưa đóng hết) */
+    if (g_u8CurrentLevel != 0U) {
+        ESP_LOGW(TAG, "Cửa chưa đóng hết (%u%%) -> Báo mã 2", g_u8CurrentLevel);
+        g_u8GateOpenGapState = 2U;
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    /* 3. Đủ điều kiện -> Gán mã 1 (Mở thành công / Đang mở khe thoáng) */
+    g_u8GateOpenGapState = 1U;
+
+    uint32_t u32GapSec = (g_sExtraConfig.sgmCycleGap > 0) ? g_sExtraConfig.sgmCycleGap : 10U;
+    uint32_t u32FullCycleSec = (g_sExtraConfig.sgmCycle > 0) ? g_sExtraConfig.sgmCycle : 60U;
+
+    /* Tính toán phần trăm Target theo tỷ lệ thời gian */
+    uint32_t u32Target = (u32GapSec * 100U) / u32FullCycleSec;
+    g_u8TargetLevel = (u32Target > 100U) ? 100U : (uint8_t)u32Target;
+    g_i8Direction = 1;
+
+    app_logic_relay_msg_t sMsg = {
+        .eCmd = E_APP_LOGIC_RELAY_CMD_OPEN,
+        .u32PulseDurationMs = 0U,
+        .bForceOverride = false
+    };
+
+    esp_err_t eErr = app_logic_relay_SendMsg(&sMsg);
+
+    /* Kích hoạt Timer đếm ngược dừng khe thoáng */
+    if (eErr == ESP_OK) {
+        if (g_hVentilationGapTimer == NULL) {
+            g_hVentilationGapTimer = xTimerCreate("tmr_gap", pdMS_TO_TICKS(u32GapSec * 1000U), pdFALSE, NULL, prv_VentilationGapTimerCb);
+        } else {
+            (void)xTimerChangePeriod(g_hVentilationGapTimer, pdMS_TO_TICKS(u32GapSec * 1000U), 0);
+        }
+        (void)xTimerStart(g_hVentilationGapTimer, 0);
+    } else {
+        g_u8GateOpenGapState = 3U; // Lỗi Queue/Relay -> Báo mã 3
+    }
+
+    app_logic_relay_UpdateAppUI();
+    return eErr;
+}
 
 /**
  * @brief trả về giá trị thực tế hiện tại của của , đang ở bao nhiêu %
@@ -60,6 +129,11 @@ void app_logic_relay_UpdateAppUI(void) {
     uint8_t u8Gate1 = 0U; // Trạng thái báo cáo nút đóng 
     uint8_t u8Gate2 = 0U; // Trạng thái báo cáo nút STOP ()
     uint8_t u8Gate3 = 0U; // Trạng thái báo cáo nút mở 
+    /* 1. Kiểm tra xem Timer khe thoáng có đang hoạt động hay không */
+    uint8_t u8ReportLevel = g_u8CurrentLevel;
+    if (g_u8GateOpenGapState == 1U || g_u8GateOpenGapState == 4U) {
+        u8ReportLevel = 0U;
+    }
 
     if (g_u8CurrentLevel == g_u8TargetLevel || g_i8Direction == 0) {
         /* 1. TRẠNG THÁI DỪNG (Thực tế đã bằng mong muốn) */
@@ -74,7 +148,11 @@ void app_logic_relay_UpdateAppUI(void) {
             /* Đang chạy lên (Mở): Tắt chân thuận (Mở), Sáng chân đối ngược (Đóng) */
             u8Gate1 = 0U; 
             u8Gate2 = 0U; 
-            u8Gate3 = 1U; 
+            if (g_u8GateOpenGapState == 1U) {
+                u8Gate3 = 0U;
+            } else {
+                u8Gate3 = 1U; // Mở thường thì mới sáng nút gate_3
+            }
         }   
         else if (g_i8Direction == -1) {
             /* Đang chạy xuống (Đóng): Tắt chân thuận (Đóng), Sáng chân đối ngược (Mở) */
@@ -88,7 +166,7 @@ void app_logic_relay_UpdateAppUI(void) {
     }
 
     /* Gọi API đẩy bản tin lên MQTT */
-    (void)app_logic_mqtt_publisher_ReportGateData(u8Gate1, u8Gate2, u8Gate3, g_u8CurrentLevel);
+    (void)app_logic_mqtt_publisher_ReportGateData(u8Gate1, u8Gate2, u8Gate3, u8ReportLevel, g_u8GateOpenGapState);
 }
 
 /**
@@ -126,6 +204,10 @@ static void app_logic_relay_TrackingTask(void *arg) {
 
             /* 2. Kiểm tra xem đã đến đích hoặc chạm giới hạn chưa */
             if (g_u8CurrentLevel == g_u8TargetLevel || g_u8CurrentLevel == 0U || g_u8CurrentLevel == 100U) {
+                /* Nếu dừng do chạm mốc Target của Khe thoáng -> Chốt mã 4 (Đã ở khe thoáng thành công) */
+                if (g_u8GateOpenGapState == 1U) {
+                    g_u8GateOpenGapState = 4U;
+                }
                 app_logic_relay_Stop(); 
                 g_i8Direction = 0;       
                 g_u8TargetLevel = g_u8CurrentLevel; /* Ép đồng bộ chốt chặn */
@@ -391,6 +473,7 @@ static void app_logic_relay_Task(void *pArg)
                         /* Cảm biến báo tiếp điểm đóng */
                         g_u8CurrentLevel = 0U;
                         g_u8TargetLevel = 0U;
+                        g_u8GateOpenGapState = 5U;
 
                         app_logic_sensor_history_item_t sSensorLog;
                         sSensorLog.i64Time = 0;
@@ -426,7 +509,7 @@ static void app_logic_relay_Task(void *pArg)
                     break;
                 }
 
-                default:
+                default: 
                     ESP_LOGW(TAG, "Mã lệnh relay không hợp lệ: %d", sMsg.eCmd);
                     eErr = ESP_ERR_INVALID_ARG;
                     break;
@@ -554,19 +637,23 @@ esp_err_t app_logic_relay_Init(void)
 
 esp_err_t app_logic_relay_SendMsg(const app_logic_relay_msg_t *pMsg)
 {
-  if ((!g_bIsReady) || (g_hRelayCommandQueue == NULL) || (g_hRelayTask == NULL)) {
-    return ESP_ERR_INVALID_STATE;
-  }
+    if ((!g_bIsReady) || (g_hRelayCommandQueue == NULL) || (g_hRelayTask == NULL)) {
+        return ESP_ERR_INVALID_STATE;
+    }
 
-  if (pMsg == NULL) {
-    return ESP_ERR_INVALID_ARG;
-  }
+    if (pMsg == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if ((g_hVentilationGapTimer != NULL) && (pMsg->eCmd != E_APP_LOGIC_RELAY_CMD_SENSOR_STATE_CHANGED)) {
+        (void)xTimerStop(g_hVentilationGapTimer, 0);
+    }
 
-  return (xQueueSend(g_hRelayCommandQueue, pMsg, 0U) == pdPASS) ? ESP_OK : ESP_ERR_TIMEOUT;
+    return (xQueueSend(g_hRelayCommandQueue, pMsg, 0U) == pdPASS) ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
 esp_err_t app_logic_relay_Open(void)
 {
+    g_u8GateOpenGapState = 0U;
     app_logic_relay_msg_t sMsg = {
         .eCmd = E_APP_LOGIC_RELAY_CMD_OPEN,
         .u32PulseDurationMs = 0U,
@@ -590,6 +677,7 @@ esp_err_t app_logic_relay_Open(void)
 
 esp_err_t app_logic_relay_Close(void)
 {
+    g_u8GateOpenGapState = 0U;
     app_logic_relay_msg_t sMsg = {
         .eCmd = E_APP_LOGIC_RELAY_CMD_CLOSE,
         .u32PulseDurationMs = 0U,
@@ -602,6 +690,9 @@ esp_err_t app_logic_relay_Close(void)
 
 esp_err_t app_logic_relay_Stop(void)
 {
+    if (g_u8GateOpenGapState == 1U) {
+        g_u8GateOpenGapState = 2U; // 2: Bị dừng giữa chừng / Cửa chưa đóng hết
+    }
     app_logic_relay_msg_t sMsg = {
         .eCmd = E_APP_LOGIC_RELAY_CMD_STOP,
         .u32PulseDurationMs = 0U,

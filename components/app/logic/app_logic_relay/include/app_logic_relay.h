@@ -93,6 +93,8 @@ esp_err_t app_logic_relay_SetLevel(uint8_t u8Level);
 void app_logic_relay_UpdateAppUI(void);
 
 
+esp_err_t app_logic_relay_OpenVentilationGap(void);
+
 #ifdef __cplusplus
 }
 #endif

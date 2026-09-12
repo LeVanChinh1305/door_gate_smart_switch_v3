@@ -172,7 +172,12 @@ static void app_logic_mqtt_HandleSetData(const cJSON *jsRoot)
                     } else {
                         ESP_LOGW(TAG, "Giá trị gate_level không hợp lệ: %d", iValue);
                     }
-                } else {
+                }else if(strcmp(pcParam, "gate_open_gap") == 0){
+                    if(iValue == 1){
+                        ESP_LOGI(TAG, "-> Khớp lệnh mở khe thoáng (gate_open_gap)");
+                        app_logic_relay_OpenVentilationGap();
+                    }
+                }else {
                     ESP_LOGW(TAG, "Param điều khiển không được hỗ trợ: %s", pcParam);
                 }
             } else {
@@ -547,7 +552,7 @@ esp_err_t app_logic_mqtt_Init(void)
     
     BaseType_t xRet = xTaskCreate(app_logic_mqtt_Task, 
                                   "mqtt_logic_task", 
-                                  DF_TASK_STACK_LARGE, 
+                                  DF_TASK_STACK_MAX, 
                                   NULL, 
                                   DF_TASK_PRIO_NORMAL, 
                                   NULL);
