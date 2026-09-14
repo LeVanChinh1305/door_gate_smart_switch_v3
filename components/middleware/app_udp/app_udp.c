@@ -26,6 +26,7 @@
 #include "esp_netif.h"
 #include "esp_wifi.h"
 #include "cJSON.h"
+#include "app_led_state.h"
 
 /* ====================================================================
  * Hằng số cấu hình nội bộ (Internal Macros DF_...)
@@ -63,7 +64,6 @@ static volatile bool     g_bAnnounceEnabled = false;
 static bool              g_bWifiInitialized = false;
 static esp_netif_t      *g_pUdpApNetif = NULL;
 static uint16_t          g_u16UdpDevicePort = DF_UDP_SERVER_PORT;
-static uint64_t          g_u64LastTimestampMs = 0U;
 static TaskHandle_t      g_hUdpTaskHandle = NULL;
 
 /* ====================================================================
@@ -73,7 +73,6 @@ static void      app_udp_Task(void *pvArg);
 static esp_err_t app_udp_StartServerTask(void);
 static esp_err_t app_udp_OpenSocket(uint16_t u16DevicePort);
 static esp_err_t app_udp_StartSoftAp(void);
-static uint64_t  app_udp_NextTimestampMs(void);
 static void      app_udp_AddTimestamp(cJSON *pResponse);
 static void      app_udp_AddDeviceIdentity(cJSON *pResponse, int32_t i32DevType);
 static void      app_udp_AddStatus(cJSON *pResponse, const char *pcName, int32_t i32Code);
@@ -594,6 +593,7 @@ static void app_udp_Task(void *pvArg)
             g_bUdpRunning = false;
             app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
             app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
+            app_led_state_SetState(E_LED_STATE_LOCKED);
         }
     }
 
