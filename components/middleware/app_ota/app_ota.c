@@ -21,6 +21,9 @@ static const char *TAG = "APP_OTA";
 
 static e_ota_state_t g_eOtaState = E_OTA_STATE_IDLE;
 
+/* Cấp phát tĩnh buffer đệm ghi Flash để tránh phân mảnh Heap RAM (malloc failure) */
+static char s_acOtaWriteBuf[DF_OTA_BUF_SIZE];
+
 typedef struct {
     char acUrl[DF_OTA_URL_MAX_LEN];
 } app_ota_param_t;
@@ -42,7 +45,7 @@ static void prv_OtaTask(void *pvParam)
         .url = psParam->acUrl,
         .transport_type = HTTP_TRANSPORT_OVER_TCP, /* Ép dùng Socket TCP thô, tránh kích hoạt SSL */
         .timeout_ms = 30000,                       /* Nâng timeout lên 30s xử lý trễ ghi Flash */
-        .buffer_size = 4096,                       /* Bộ đệm Socket HTTP 4KB */
+        .buffer_size = 2048,                       /* Bộ đệm Socket HTTP 2KB để tiết kiệm RAM */
         .buffer_size_tx = 1024,
         .keep_alive_enable = true,
     };
@@ -103,17 +106,6 @@ static void prv_OtaTask(void *pvParam)
         return;
     }
 
-    char *ota_write_buf = (char *)malloc(DF_OTA_BUF_SIZE);
-    if (ota_write_buf == NULL) {
-        ESP_LOGE(TAG, "Không đủ RAM cấp phát ota_write_buf");
-        esp_ota_end(update_handle);
-        esp_http_client_cleanup(client);
-        g_eOtaState = E_OTA_STATE_FAILED;
-        free(psParam);
-        vTaskDelete(NULL);
-        return;
-    }
-
     int data_read = 0;
     int binary_file_len = 0;
     int last_log_len = 0;
@@ -121,7 +113,7 @@ static void prv_OtaTask(void *pvParam)
     bool bSuccess = true;
 
     while (1) {
-        data_read = esp_http_client_read(client, ota_write_buf, DF_OTA_BUF_SIZE);
+        data_read = esp_http_client_read(client, s_acOtaWriteBuf, DF_OTA_BUF_SIZE);
         if (data_read < 0) {
             /* Nếu bị timeout/nghẽn tạm thời, cho phép thử lại tối đa 5 lần trước khi hủy */
             if (retry_cnt < 5) {
@@ -140,7 +132,7 @@ static void prv_OtaTask(void *pvParam)
 
         retry_cnt = 0; /* Reset bộ đếm retry khi đọc thành công dữ liệu mới */
 
-        eErr = esp_ota_write(update_handle, (const void *)ota_write_buf, data_read);
+        eErr = esp_ota_write(update_handle, (const void *)s_acOtaWriteBuf, data_read);
         if (eErr != ESP_OK) {
             ESP_LOGE(TAG, "Lỗi ghi dữ liệu vào Flash: %s", esp_err_to_name(eErr));
             bSuccess = false;
@@ -163,7 +155,6 @@ static void prv_OtaTask(void *pvParam)
         vTaskDelay(pdMS_TO_TICKS(5));
     }
 
-    free(ota_write_buf);
     esp_http_client_cleanup(client);
 
     if (bSuccess && (esp_ota_end(update_handle) == ESP_OK)) {

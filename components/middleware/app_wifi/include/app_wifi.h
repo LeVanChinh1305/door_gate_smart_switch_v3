@@ -34,11 +34,25 @@ esp_err_t app_wifi_InitSta(void);
 bool app_wifi_IsConnected(void);
 
 /**
+ * @brief Chủ động ngắt kết nối Wi-Fi STA và xóa cờ trạng thái kết nối.
+ * @param None.
+ * @return ESP_OK nếu thành công; mã lỗi nếu thao tác thất bại.
+ */
+esp_err_t app_wifi_Disconnect(void);
+
+/**
+ * @brief Cấu hình bật/tắt cơ chế tự động thử kết nối lại khi Wi-Fi bị ngắt.
+ * @param bEnable true để bật tự động thử lại, false để tắt.
+ * @return None.
+ */
+void app_wifi_SetAutoReconnect(bool bEnable);
+
+/**
  * @brief Chờ Wi-Fi kết nối trong khoảng thời gian chỉ định.
  * @param u32TimeoutMs Thời gian chờ tối đa, tính bằng mili-giây.
  * @return true nếu kết nối thành công; false nếu hết thời gian hoặc thất bại.
  */
-bool app_wifi_WaitForConnect(uint32_t timeout_ms);
+bool app_wifi_WaitForConnect(uint32_t u32TimeoutMs);
 
 
 #ifdef __cplusplus

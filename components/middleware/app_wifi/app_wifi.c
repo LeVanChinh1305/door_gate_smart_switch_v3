@@ -19,6 +19,7 @@
 
 static const char *TAG = "APP_WIFI";
 static int32_t g_i32WifiRetryCount = 0;
+static bool g_bAutoReconnect = true;
 static EventGroupHandle_t g_hWifiEventGroup = NULL; 
 
 /**
@@ -53,11 +54,17 @@ static void wifi_event_handler(void *pArg, esp_event_base_t eEventBase, int32_t 
                     ESP_LOGW(TAG, "Đã ngắt kết nối khỏi AP, không có thông tin nguyên nhân");
                 }
 
-                if (g_i32WifiRetryCount < DF_WIFI_MAX_RETRY_COUNT) {
+                if (g_hWifiEventGroup != NULL) {
+                    (void)xEventGroupClearBits(g_hWifiEventGroup, DF_WIFI_CONNECTED_BIT);
+                }
+
+                if (g_bAutoReconnect && (g_i32WifiRetryCount < DF_WIFI_MAX_RETRY_COUNT)) {
                     g_i32WifiRetryCount++;
                     ESP_LOGI(TAG, "Đang thử kết nối lại %ld/%d", (long)g_i32WifiRetryCount, DF_WIFI_MAX_RETRY_COUNT);
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     (void)esp_wifi_connect();
+                } else if (!g_bAutoReconnect) {
+                    ESP_LOGI(TAG, "Ngắt kết nối chủ động, không kích hoạt tự động kết nối lại");
                 } else {
                     g_i32WifiRetryCount = 0;
                     if (g_hWifiEventGroup != NULL) {
@@ -92,6 +99,9 @@ static void wifi_event_handler(void *pArg, esp_event_base_t eEventBase, int32_t 
 
             case IP_EVENT_STA_LOST_IP:
                 ESP_LOGW(TAG, "Đã mất địa chỉ IP từ AP!");
+                if (g_hWifiEventGroup != NULL) {
+                    (void)xEventGroupClearBits(g_hWifiEventGroup, DF_WIFI_CONNECTED_BIT);
+                }
                 break;
 
             default:
@@ -215,6 +225,34 @@ bool app_wifi_IsConnected(void)
     }
     EventBits_t uxBits = xEventGroupGetBits(g_hWifiEventGroup);
     return (uxBits & DF_WIFI_CONNECTED_BIT) != 0;
+}
+
+/**
+ * @brief Chủ động ngắt kết nối Wi-Fi STA và xóa cờ trạng thái kết nối.
+ * @param None.
+ * @return ESP_OK nếu thành công; mã lỗi nếu thao tác thất bại.
+ */
+esp_err_t app_wifi_Disconnect(void)
+{
+    g_bAutoReconnect = false;
+    g_i32WifiRetryCount = 0;
+    if (g_hWifiEventGroup != NULL) {
+        (void)xEventGroupClearBits(g_hWifiEventGroup, DF_WIFI_CONNECTED_BIT);
+    }
+    return esp_wifi_disconnect();
+}
+
+/**
+ * @brief Cấu hình bật/tắt cơ chế tự động thử kết nối lại khi Wi-Fi bị ngắt.
+ * @param bEnable true để bật tự động thử lại, false để tắt.
+ * @return None.
+ */
+void app_wifi_SetAutoReconnect(bool bEnable)
+{
+    g_bAutoReconnect = bEnable;
+    if (!bEnable) {
+        g_i32WifiRetryCount = 0;
+    }
 }
 
 /**

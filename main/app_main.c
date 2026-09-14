@@ -20,6 +20,7 @@
 #include "app_wifi.h"
 #include "app_logic_schedule.h"
 #include "app_logic_extra_config.h"
+#include "app_udp.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -215,7 +216,10 @@ void app_main(void) {
       if (!s_bIsBlufiInited) {
         ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_AUTO -> Tắt MQTT, udp Khởi tạo BluFi...");
         (void)app_mqtt_Stop();
-        // tắt udp 
+        if (s_bIsUdpInited) {
+          (void)app_udp_Deinit();
+          s_bIsUdpInited = false;
+        }
         
         s_bIsBlufiInited = true;
         (void)app_blufi_Init();
@@ -233,12 +237,12 @@ void app_main(void) {
       if (!s_bIsUdpInited) {
         ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_MANUAL -> Khởi tạo UDP Socket...");
         s_bIsUdpInited = true;
-        // (void)app_udp_Init();
-    }
+        (void)app_udp_Init();
+      }
     }
     else if (s_bIsUdpInited) {
       ESP_LOGI(TAG, "Thoát chế độ CONNECT_MANUAL -> Dừng UDP Socket...");
-      // (void)app_udp_Deinit();
+      (void)app_udp_Deinit();
       s_bIsUdpInited = false;
     }
 

@@ -17,4 +17,5 @@ idf_component_register(
         app_relay_state
         app_logic_schedule
         app_logic_extra_config
+        app_udp
 )
