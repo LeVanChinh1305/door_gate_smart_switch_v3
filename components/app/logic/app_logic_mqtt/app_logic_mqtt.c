@@ -24,6 +24,7 @@
 #include "app_logic_telemetry.h"
 #include "app_nvs.h"
 #include "esp_task_wdt.h"
+#include "app_ota.h"
 
 static const char *TAG = "APP_LOGIC_MQTT";
 
@@ -525,6 +526,13 @@ static void app_logic_mqtt_Task(void *pArg)
                         }else if (strcmp(pcCmdName, "CmdDeleteDevice") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdDeleteDevice, tiến hành xóa thiết bị...");
                             app_logic_mqtt_HandleDeleteDevice(pcCmdName); 
+                        }else if (strcmp(pcCmdName, "CmdStartOta") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdStartOta, bắt đầu tiến trình OTA...");
+                            esp_err_t eOtaRet = app_ota_ProcessCmdStartOta(jsValue ? jsValue : jsRoot);
+                            
+                            /* Phản hồi bản tin ACK về broker theo đúng chuẩn Vconnex (50000: Thành công, 50004: Thất bại) */
+                            int i32ErrorCode = (eOtaRet == ESP_OK) ? 50000 : 50004;
+                            (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdStartOta", 0, i32ErrorCode);
                         }else {
                             ESP_LOGW(TAG, "-> Lệnh MQTT chưa được định nghĩa: %s", pcCmdName);
                         }

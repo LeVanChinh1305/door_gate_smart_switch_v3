@@ -323,7 +323,7 @@ bool app_nvs_IsProvisionedDeviceConfig(void)
 
 void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config)
 {
-  config->buzzerEnb = 1;
+  config->buzzerEnb = 0;
   config->ledEnb = 1;
   config->ledRgbOn = 16711680;
   config->ledRgbOff = 255;

@@ -177,6 +177,36 @@ static void send_response_set_device_config(int32_t dev_t, const char *dev_ext_a
   }
 }
 
+static void send_response_exit_configuration(int32_t dev_t, const char *dev_ext_addr, int32_t error_code) {
+  if (dev_ext_addr == NULL) {
+    ESP_LOGE(TAG, "Địa chỉ MAC không hợp lệ");
+    return;
+  }
+
+  cJSON *resp_root = cJSON_CreateObject();
+  if (resp_root != NULL) {
+    (void)cJSON_AddStringToObject(resp_root, "name", "CmdExitConfiguration");
+    (void)cJSON_AddNumberToObject(resp_root, "devT", (double)dev_t);
+    (void)cJSON_AddStringToObject(resp_root, "devExtAddr", dev_ext_addr);
+    (void)cJSON_AddNumberToObject(resp_root, "errorCode", (double)error_code);
+    (void)cJSON_AddNumberToObject(resp_root, "timeStamp", (double)((uint32_t)time(NULL)));
+
+    char *json_out = cJSON_PrintUnformatted(resp_root);
+    if (json_out != NULL) {
+      const size_t len = strlen(json_out);
+      const esp_err_t err =
+          esp_blufi_send_custom_data((uint8_t *)json_out, (uint32_t)len);
+      if (err == ESP_OK) {
+        ESP_LOGI(TAG, "Phản hồi CmdExitConfiguration: %s", json_out);
+      } else {
+        ESP_LOGE(TAG, "Gửi phản hồi CmdExitConfiguration thất bại: %d", (int)err);
+      }
+      cJSON_free(json_out);
+    }
+    cJSON_Delete(resp_root);
+  }
+}
+
 static void get_esp_dev_ext_addr(char *out, size_t out_size) {
   if ((out == NULL) || (out_size == 0U)) {
     return;
@@ -374,8 +404,6 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
   }
 
   case ESP_BLUFI_EVENT_RECV_CUSTOM_DATA: {
-    ESP_LOGI(TAG, "Đã nhận dữ liệu tùy chỉnh: %s", param->custom_data);
-
     if ((param->custom_data.data == NULL) ||
         (param->custom_data.data_len == 0U) ||
         (param->custom_data.data_len >= DF_BLUFI_CUSTOM_DATA_BUFFER_SIZE)) {
@@ -388,6 +416,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
     (void)memcpy(cJsonBuffer, param->custom_data.data,
                  (size_t)param->custom_data.data_len);
     cJsonBuffer[param->custom_data.data_len] = '\0';
+    ESP_LOGI(TAG, "Đã nhận dữ liệu tùy chỉnh: %s", cJsonBuffer);
 
     cJSON *root = cJSON_Parse(cJsonBuffer);
     if (root != NULL) {
@@ -568,6 +597,34 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
           }
         }
 
+        // XỬ LÝ LỆNH 2: CmdExitConfiguration
+        else if (strcmp(cmd_name->valuestring, "CmdExitConfiguration") == 0) {
+          ESP_LOGI(TAG, "Nhận lệnh CmdExitConfiguration -> Thoát cấu hình BluFi");
+
+          if (cDeviceAddress[0] == '\0') {
+            get_esp_dev_ext_addr(cDeviceAddress, sizeof(cDeviceAddress));
+          }
+          if (dev_t == 0) {
+            dev_t = (g_sCurrentDeviceConfig.dev_type != 0)
+                        ? g_sCurrentDeviceConfig.dev_type
+                        : DF_BLUFI_DEVICE_TYPE_DEFAULT;
+          }
+
+          /* Tắt các cờ trạng thái kết nối trung gian, chuyển sang chế độ NORMAL */
+          app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+          app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
+          app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
+          app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
+          app_led_state_SetState(E_LED_STATE_LOCKED);
+
+          /* Phản hồi CmdExitConfiguration về cho App di động */
+          send_response_exit_configuration(dev_t, cDeviceAddress, 50000);
+
+          /* Đánh dấu shutdown và deinit BluFi sau 1s để giải phóng RAM */
+          g_bShutdownAfterDisconnect = true;
+          xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
+        }
+
         else {
           ESP_LOGW(TAG, "Lệnh không hợp lệ: %s", cmd_name->valuestring);
         }
@@ -717,7 +774,10 @@ esp_err_t app_blufi_Deinit(void) {
   ESP_LOGI(TAG, "Hủy khởi tạo BLUFI thành công");
 
   /*  Khởi tạo MQTT tại đây */
-  if (g_sCurrentDeviceConfig.dev_type != 0) {
+  if (g_sCurrentDeviceConfig.broker[0] == '\0') {
+      (void)app_nvs_LoadDeviceConfig(&g_sCurrentDeviceConfig);
+  }
+  if (g_sCurrentDeviceConfig.broker[0] != '\0') {
       ESP_LOGI(TAG, "Đang khởi tạo MQTT sau khi tắt Bluetooth...");
       app_mqtt_StartInit(&g_sCurrentDeviceConfig);
   }

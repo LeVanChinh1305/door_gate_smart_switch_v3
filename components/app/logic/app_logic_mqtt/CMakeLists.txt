@@ -14,4 +14,5 @@ idf_component_register(
         app_nvs
         esp_timer
         app_logic_telemetry
+        app_ota
 )

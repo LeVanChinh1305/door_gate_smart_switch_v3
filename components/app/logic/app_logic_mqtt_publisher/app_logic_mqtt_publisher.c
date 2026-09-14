@@ -196,7 +196,7 @@ esp_err_t app_logic_mqtt_publisher_ReportDeviceInfo(void)
              "\"devExtAddr\":\"%s\","
              "\"timeStamp\":%llu,"
              "\"devV\":["
-             "{\"param\":\"wifi_version\",\"value\":\"1.1\"},"
+             "{\"param\":\"wifi_version\",\"value\":\"1.2\"},"
              "{\"param\":\"ble_version\",\"value\":\"1.1\"}"
              "]"
              "}",
