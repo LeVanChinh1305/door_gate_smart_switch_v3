@@ -40,6 +40,7 @@ extern "C" {
 // Thời gian timeout Watchdog Task — dùng trong app_main.c khi init WDT và trong mọi task chạy dài (touch/relay/led) để biết chu kỳ phải "cho ăn". 
 #define DF_WDT_TIMEOUT_MS        (10000UL)
 // Mức ưu tiên Task (Task Priorities): Việc quy hoạch tập trung mức ưu tiên cho các luồng xử lý giúp kiểm soát luồng thực thi và ngăn chặn hiện tượng tranh chấp tài nguyên (Priority Inversion)
+#define DF_TASK_PRIO_MAX        (6)   // dùng cho OTA 
 #define DF_TASK_PRIO_CRITICAL   (5)   // relay_task — lệnh dừng/đảo chiều cửa
 #define DF_TASK_PRIO_HIGH       (4)   // touch_task — đọc phím chạm
 #define DF_TASK_PRIO_NORMAL     (3)   // udp_task, VÀ mqtt_cfg.task.priority (set tường minh để tránh trùng prio=5 với relay_task)

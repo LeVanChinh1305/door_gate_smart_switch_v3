@@ -12,12 +12,12 @@
 #include "app_logic_mqtt_publisher.h"
 #include <string.h>
 #include <stdlib.h>
+#include "app_common.h"
 
 static const char *TAG = "APP_OTA";
 
 #define DF_OTA_URL_MAX_LEN          (256U)
-#define DF_OTA_BUF_SIZE             (1024U)
-#define DF_OTA_TASK_STACK_SIZE      (8192U)
+#define DF_OTA_BUF_SIZE             (4096U)
 
 static e_ota_state_t g_eOtaState = E_OTA_STATE_IDLE;
 
@@ -37,9 +37,13 @@ static void prv_OtaTask(void *pvParam)
 
     ESP_LOGI(TAG, "Bắt đầu tải và ghi OTA từ URL: %s", psParam->acUrl);
 
+    /* Cấu hình HTTP Client tối ưu cho HTTP Local */
     esp_http_client_config_t sHttpConfig = {
         .url = psParam->acUrl,
-        .timeout_ms = 15000,
+        .transport_type = HTTP_TRANSPORT_OVER_TCP, /* Ép dùng Socket TCP thô, tránh kích hoạt SSL */
+        .timeout_ms = 30000,                       /* Nâng timeout lên 30s xử lý trễ ghi Flash */
+        .buffer_size = 4096,                       /* Bộ đệm Socket HTTP 4KB */
+        .buffer_size_tx = 1024,
         .keep_alive_enable = true,
     };
 
@@ -62,7 +66,18 @@ static void prv_OtaTask(void *pvParam)
         return;
     }
 
-    (void)esp_http_client_fetch_headers(client);
+    int content_length = esp_http_client_fetch_headers(client);
+    int status_code = esp_http_client_get_status_code(client);
+    ESP_LOGI(TAG, "HTTP phản hồi: Status=%d, Content-Length=%d", status_code, content_length);
+
+    if (status_code != 200) {
+        ESP_LOGE(TAG, "HTTP Status không hợp lệ (%d != 200), hủy tiến trình OTA", status_code);
+        esp_http_client_cleanup(client);
+        g_eOtaState = E_OTA_STATE_FAILED;
+        free(psParam);
+        vTaskDelete(NULL);
+        return;
+    }
 
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
     if (update_partition == NULL) {
@@ -101,18 +116,29 @@ static void prv_OtaTask(void *pvParam)
 
     int data_read = 0;
     int binary_file_len = 0;
+    int last_log_len = 0;
+    int retry_cnt = 0;
     bool bSuccess = true;
 
     while (1) {
         data_read = esp_http_client_read(client, ota_write_buf, DF_OTA_BUF_SIZE);
         if (data_read < 0) {
-            ESP_LOGE(TAG, "Lỗi đọc dữ liệu từ HTTP Stream");
+            /* Nếu bị timeout/nghẽn tạm thời, cho phép thử lại tối đa 5 lần trước khi hủy */
+            if (retry_cnt < 5) {
+                retry_cnt++;
+                ESP_LOGW(TAG, "HTTP stream read timeout, retrying (%d/5)...", retry_cnt);
+                vTaskDelay(pdMS_TO_TICKS(200));
+                continue;
+            }
+            ESP_LOGE(TAG, "Lỗi đọc dữ liệu từ HTTP Stream (đã đọc %d bytes)", binary_file_len);
             bSuccess = false;
             break;
         } else if (data_read == 0) {
-            /* Tải hết file */
+            /* Tải hết file hoàn tất */
             break;
         }
+
+        retry_cnt = 0; /* Reset bộ đếm retry khi đọc thành công dữ liệu mới */
 
         eErr = esp_ota_write(update_handle, (const void *)ota_write_buf, data_read);
         if (eErr != ESP_OK) {
@@ -122,6 +148,19 @@ static void prv_OtaTask(void *pvParam)
         }
 
         binary_file_len += data_read;
+        if (binary_file_len - last_log_len >= (200 * 1024)) {
+            last_log_len = binary_file_len;
+            if (content_length > 0) {
+                ESP_LOGI(TAG, "Tiến độ nạp OTA: %d / %d bytes (%.1f%%)",
+                         binary_file_len, content_length,
+                         ((float)binary_file_len / (float)content_length) * 100.0f);
+            } else {
+                ESP_LOGI(TAG, "Tiến độ nạp OTA: %d bytes...", binary_file_len);
+            }
+        }
+
+        /* Nghỉ nhẹ 5ms sau mỗi block 4KB để nhường CPU cho WiFi Stack gửi gói TCP ACK */
+        vTaskDelay(pdMS_TO_TICKS(5));
     }
 
     free(ota_write_buf);
@@ -192,7 +231,7 @@ esp_err_t app_ota_ProcessCmdStartOta(const cJSON *jsValue)
 
     snprintf(psOtaParam->acUrl, sizeof(psOtaParam->acUrl), "%s", jsUrl->valuestring);
 
-    BaseType_t xRet = xTaskCreate(prv_OtaTask, "ota_task", DF_OTA_TASK_STACK_SIZE, (void *)psOtaParam, 5, NULL);
+    BaseType_t xRet = xTaskCreate(prv_OtaTask, "ota_task", DF_TASK_STACK_MAX, (void *)psOtaParam, DF_TASK_PRIO_MAX, NULL);
     if (xRet != pdPASS) {
         ESP_LOGE(TAG, "Tạo ota_task thất bại");
         free(psOtaParam);

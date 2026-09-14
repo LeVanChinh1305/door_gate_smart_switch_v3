@@ -137,16 +137,17 @@ void app_main(void) {
           ESP_LOGI(TAG, "Chưa có Wi-Fi trong NVS, đang chờ lệnh kết nối thủ công/ tự động");
           app_led_state_SetState(E_LED_STATE_UNCONNECTED);
       } else {
-          ESP_LOGI(TAG, "Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái kết nối tự động...");
+          ESP_LOGI(TAG, "Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái hoạt động bình thường...");
           
-          /* Cập nhật Bitmask: Tắt UNCONNECTED, Bật CONNECT_AUTO */
+          /* Cập nhật Bitmask: Tắt UNCONNECTED, Bật NORMAL */
           app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
           app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
           
           app_led_state_SetState(E_LED_STATE_LOCKED);
       }
   }
-  else if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
+
+  if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
     ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối tự động (BluFi)...");
   }
   else if (app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
