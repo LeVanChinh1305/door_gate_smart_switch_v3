@@ -128,6 +128,7 @@ esp_err_t app_nvs_InitNvs(void) {
   }
   if (ret == ESP_OK) {
     ESP_LOGI(TAG, "Khởi tạo NVS thành công");
+    (void)app_nvs_InitSensorConfigDefault();
   } else {
     ESP_LOGE(TAG, "Khởi tạo NVS thất bại");
     return ret;
@@ -384,11 +385,9 @@ esp_err_t app_nvs_SaveExtraConfig(const app_extra_config_t *config) {
 
 esp_err_t app_nvs_LoadExtraConfig(app_extra_config_t *config) {
   DF_CHECK_NULL_PARAM(config);
-  memset(config, 0,
-         sizeof(app_extra_config_t)); // Xóa trắng dữ liệu trước khi đọc
+  memset(config, 0, sizeof(app_extra_config_t)); // Xóa trắng dữ liệu trước khi đọc
 
-  app_nvs_SetDefaultExtraConfig(
-      config); // đọc dữ liệu mặc định trước (tránh trường hợp mở nvs thất bại)
+  app_nvs_SetDefaultExtraConfig(config); // đọc dữ liệu mặc định trước (tránh trường hợp mở nvs thất bại)
 
   nvs_handle_t hHandle = 0U;
   esp_err_t eErr =
@@ -571,8 +570,7 @@ esp_err_t app_nvs_DeleteAllSchedules(void) {
   return eErr;
 }
 
-esp_err_t app_nvs_GetAllSchedules(app_schedule_item_t *pasSchedules,
-                                  uint8_t *pu8Count) {
+esp_err_t app_nvs_GetAllSchedules(app_schedule_item_t *pasSchedules,uint8_t *pu8Count) {
   *pu8Count = 0;
   nvs_handle_t xNvsHandle;
   esp_err_t eErr =
@@ -632,4 +630,58 @@ esp_err_t app_nvs_ClearExtraConfig(void) {
     ESP_LOGI(TAG, "Đã xóa Extra Config");
   }
   return eErr;
+}
+
+
+esp_err_t app_nvs_SaveSensorConfig(const app_nvs_sensor_config_t *psConfig)
+{
+    DF_CHECK_NULL_PARAM(psConfig);
+    nvs_handle_t hNvs;
+    esp_err_t err = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hNvs);
+    if (err != ESP_OK) return err;
+
+    err = nvs_set_blob(hNvs, DF_APP_STORAGE_KEY_SENSOR_CFG, psConfig, sizeof(app_nvs_sensor_config_t));
+    if (err == ESP_OK) {
+        err = nvs_commit(hNvs);
+    }
+    nvs_close(hNvs);
+    return err;
+}
+
+esp_err_t app_nvs_GetSensorConfig(app_nvs_sensor_config_t *psConfig)
+{
+    DF_CHECK_NULL_PARAM(psConfig);
+    
+    nvs_handle_t hNvs;
+    esp_err_t err = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hNvs);
+    if (err != ESP_OK) return err;
+
+    size_t required_size = sizeof(app_nvs_sensor_config_t);
+    err = nvs_get_blob(hNvs, DF_APP_STORAGE_KEY_SENSOR_CFG, psConfig, &required_size);
+    nvs_close(hNvs);
+    return err;
+}
+
+esp_err_t app_nvs_InitSensorConfigDefault(void)
+{
+    app_nvs_sensor_config_t sCfg;
+    
+    /* Kiểm tra xem trong Flash NVS đã có cấu hình cảm biến chưa */
+    esp_err_t err = app_nvs_GetSensorConfig(&sCfg);
+    
+    /* Nếu chưa có (Lần đầu chạy FW), ghi cấu hình mặc định vào NVS */
+    if (err == ESP_ERR_NVS_NOT_FOUND) {
+        memset(&sCfg, 0, sizeof(sCfg));
+        sCfg.u8SensorType = 0;        /* 0: Không dùng cảm biến (SENSOR_TYPE_NONE) */
+        sCfg.u8SensorAntiStuck = 0;   /* 0: Không có cảm biến */
+        sCfg.u8SensorAction = 0;
+        sCfg.u8SensorWarning = 0;
+        
+        err = app_nvs_SaveSensorConfig(&sCfg);
+        if (err == ESP_OK) {
+            ESP_LOGI(TAG, "Đã khởi tạo cấu hình Cảm biến mặc định vào NVS!");
+        }
+    }
+    
+    return err;
 }

@@ -48,7 +48,7 @@ static uint8_t g_u8GateOpenGapState = 0U;  //  report điều khiển mở khe t
                                                         // 5 là cửa đẫ đóng hoàn toàn
 
 
-/* Callback ngắt cửa khi hết thời gian hé khe thoáng */
+/* Callback ngắt cửa khi hết thời gian hé khe thoáng */ 
 static void prv_VentilationGapTimerCb(TimerHandle_t xTimer)
 {
     (void)xTimer;
@@ -184,12 +184,25 @@ static void app_logic_relay_TrackingTask(void *arg) {
         esp_task_wdt_reset();
 
         if (g_i8Direction != 0) {
+            /* Chụp lại hướng di chuyển hiện tại TRƯỚC khi ngủ, để phát hiện trường hợp
+             * một task khác (ví dụ xử lý va chạm cảm biến trong app_logic_relay_Task)
+             * đã can thiệp và đưa cửa về trạng thái dừng ngay trong lúc task này đang chờ. */
+            int8_t i8DirSnapshot = g_i8Direction;
+
             uint32_t u32TimePerOnePercentMs = g_sExtraConfig.sgmCycle * 10U; 
             if (u32TimePerOnePercentMs == 0U) {
                 u32TimePerOnePercentMs = 100U;
             }
 
             vTaskDelay(pdMS_TO_TICKS(u32TimePerOnePercentMs));
+
+            /* Nếu hướng đã bị thay đổi bởi nơi khác trong lúc chờ (vd: cảm biến va chạm đã
+             * dừng cửa và set g_i8Direction = 0) -> việc "tới đích" đã được xử lý xong ở nơi đó rồi.
+             * Bỏ qua toàn bộ vòng lặp này để tránh gọi Stop() trùng, tránh mở khóa cảm biến sớm
+             * (do Stop() giả kích hoạt prv_StartSensorReenableTimer) và tránh report trùng lặp. */
+            if (g_i8Direction != i8DirSnapshot) {
+                continue;
+            }
 
             /* Cập nhật mức thực tế an toàn chống tràn số âm */
             if (g_i8Direction == 1) {
@@ -420,92 +433,68 @@ static void app_logic_relay_Task(void *pArg)
                     break;
 
                 case E_APP_LOGIC_RELAY_CMD_SENSOR_STATE_CHANGED: {
-                    /* Nếu cảm biến đang bị khóa (sau va chạm khi relay chạy) thì bỏ qua */
+                    /* 1. Đọc cấu hình Cảm biến từ NVS */
+                    app_nvs_sensor_config_t sSensorCfg;
+                    if (app_nvs_GetSensorConfig(&sSensorCfg) != ESP_OK) {
+                        memset(&sSensorCfg, 0, sizeof(sSensorCfg));
+                    }
+
+                    /* 2. CHỈ XỬ LÝ KHI DÙNG CẢM BIẾN CÓ DÂY CHUẨN (sensorType == 1) */
+                    if (sSensorCfg.u8SensorType != 1) {
+                        ESP_LOGD(TAG, "Không phải cảm biến chuẩn (Type=%d), bỏ qua xử lý", sSensorCfg.u8SensorType);
+                        break;
+                    }
+
+                    /* 3. ĐANG ĐỨNG YÊN (g_i8Direction == 0) -> BỎ QUA HOÀN TOÀN */
+                    if (g_i8Direction == 0) {
+                        ESP_LOGD(TAG, "Cửa đang đứng yên (g_i8Direction = 0), bỏ qua tín hiệu cảm biến");
+                        break;
+                    }
+
+                    /* 4. Khóa cảm biến anti-bouncing -> Bỏ qua ngắt */
                     if (g_bSensorDisabled) {
-                        ESP_LOGD(TAG, "Cảm biến đang bị khóa (sensor_disabled = true), bỏ qua sự kiện");
+                        ESP_LOGD(TAG, "Cảm biến đang bị khóa (sensor_disabled = true), bỏ qua ngắt");
                         break;
                     }
 
-                    int i32SensorState = (int)sMsg.u32PulseDurationMs;
-                    ESP_LOGI(TAG, "Sự kiện cảm biến cửa (Header 2-Pin): raw state = %d (direction = %d)",
-                             i32SensorState, (int)g_i8Direction);
+                    /* 5. Cửa đang di chuyển (đã loại g_i8Direction == 0 ở bước 3) và cảm biến chưa bị khóa
+                     *    -> Bất kỳ tín hiệu nào từ cảm biến chuẩn tại thời điểm này đều được coi là va chạm,
+                     *       xử lý theo HƯỚNG DI CHUYỂN HIỆN TẠI chứ không phụ thuộc raw level (0/1) của GPIO,
+                     *       vì cảm biến có dây chuẩn có thể báo mức khác nhau tùy vị trí lắp đặt. */
+                    ESP_LOGW(TAG, "Phát hiện va chạm Cảm biến chuẩn! Hướng chạy hiện tại: %d, raw_level: %d",
+                             (int)g_i8Direction, (int)sMsg.u32PulseDurationMs);
 
-                    /* TRƯỜNG HỢP 1: CỬA ĐANG CHẠY (g_i8Direction != 0) GẶP VA CHẠM CẢM BIẾN / CỮ HÀNH TRÌNH */
-                    if (g_i8Direction != 0) {
-                        /* 1. Lập tức kích dừng Relay bảo vệ động cơ và dừng hành trình */
-                        (void)app_relay_TriggerPulse(E_RELAY_CMD_STOP, DF_RELAY_DEFAULT_PULSE_DURATION_MS);
-                        (void)app_relay_state_SetState(E_RELAY_STATE_STOPPED);
+                    /* 1. Dừng Relay khẩn cấp */
+                    (void)app_relay_TriggerPulse(E_RELAY_CMD_STOP, DF_RELAY_DEFAULT_PULSE_DURATION_MS);
+                    (void)app_relay_state_SetState(E_RELAY_STATE_STOPPED);
 
-                        /* 2. Khóa cảm biến chống rung/bouncing va chạm cơ khí */
-                        g_bSensorDisabled = true;
-                        if (g_hSensorReenableTimer != NULL) {
-                            (void)xTimerStop(g_hSensorReenableTimer, 0);
-                        }
+                    /* 2. Khóa cảm biến ngay khi va chạm (chỉ mở lại sau 10s kể từ lệnh điều khiển tiếp theo) */
+                    g_bSensorDisabled = true;
 
-                        app_logic_sensor_history_item_t sSensorLog;
-                        sSensorLog.i64Time = 0;
+                    app_logic_sensor_history_item_t sSensorLog;
+                    sSensorLog.i64Time = 0;
 
-                        /* 3. Phân biệt theo chiều di chuyển:
-                         * - Đang MỞ (direction == 1) gặp cữ -> Cửa MỞ HOÀN TOÀN (100%)
-                         * - Đang ĐÓNG (direction == -1) gặp cữ -> Cửa ĐÓNG HOÀN TOÀN (0%) */
-                        if (g_i8Direction == 1) {
-                            g_u8CurrentLevel = 100U;
-                            g_u8TargetLevel = 100U;
-                            sSensorLog.u8SensorState = 1U;
-                            ESP_LOGW(TAG, "Va chạm cữ khi đang MỞ -> Dừng relay, chốt MỞ HOÀN TOÀN (100%%) & KHÓA CẢM BIẾN");
-                        } else {
-                            g_u8CurrentLevel = 0U;
-                            g_u8TargetLevel = 0U;
-                            sSensorLog.u8SensorState = 0U;
-                            ESP_LOGW(TAG, "Va chạm cữ khi đang ĐÓNG -> Dừng relay, chốt ĐÓNG HOÀN TOÀN (0%%) & KHÓA CẢM BIẾN");
-                        }
-
-                        g_i8Direction = 0;
-
-                        /* 4. Xuất báo cáo trạng thái cảm biến lên MQTT và cập nhật giao diện App */
-                        (void)app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1);
-                        app_logic_relay_UpdateAppUI();
-                        break;
-                    }
-
-                    /* TRƯỜNG HỢP 2: CỬA ĐANG TĨNH / DỪNG (g_i8Direction == 0) */
-                    if (i32SensorState == DF_HEADER2H_STATE_CLOSED) {
-                        /* Cảm biến báo tiếp điểm đóng */
+                    /* 3. Phân loại trạng thái theo hướng di chuyển */
+                    if (g_i8Direction == 1) {
+                        /* Đang đi lên (Mở) -> Đưa về Mở 100% ngay lập tức */
+                        g_u8CurrentLevel = 100U;
+                        g_u8TargetLevel = 100U;
+                        sSensorLog.u8SensorState = 1U;
+                        ESP_LOGW(TAG, "Va chạm khi ĐANG LÊN -> Dừng relay, chốt MỞ HOÀN TOÀN (100%%)");
+                    } else if (g_i8Direction == -1) {
+                        /* Đang đi xuống (Đóng) -> Đưa về Đóng 0% ngay lập tức */
                         g_u8CurrentLevel = 0U;
                         g_u8TargetLevel = 0U;
-                        g_u8GateOpenGapState = 5U;
-
-                        app_logic_sensor_history_item_t sSensorLog;
-                        sSensorLog.i64Time = 0;
                         sSensorLog.u8SensorState = 0U;
-                        (void)app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1);
-
-                        app_logic_relay_UpdateAppUI();
-                        ESP_LOGI(TAG, "Trạng thái tĩnh: Cảm biến báo Cửa ĐÓNG HOÀN TOÀN (0%%)");
-                    } else {
-                        /* Cảm biến báo tiếp điểm hở (mở) */
-                        bool bWasClosed = (g_u8CurrentLevel == 0U);
-                        if (bWasClosed) {
-                            g_u8CurrentLevel = 100U;
-                            g_u8TargetLevel = 100U;
-
-                            /* Kiểm tra tính năng Cảnh báo ban đêm khi cửa bị mở từ bên ngoài */
-                            if (app_logic_extra_config_IsWarningNightActive()) {
-                                ESP_LOGW(TAG, ">>> CẢNH BÁO BAN ĐÊM: Cảm biến phát hiện cửa mở!");
-                                app_logic_extra_config_TriggerBuzzerRepeat(100, 100, 3);
-                                app_led_state_SetState(E_LED_STATE_WARNING);
-                                (void)app_logic_telemetry_ReportWarningSgm(1, 0, 0, 14, NULL);
-                            }
-                        }
-
-                        app_logic_sensor_history_item_t sSensorLog;
-                        sSensorLog.i64Time = 0;
-                        sSensorLog.u8SensorState = 1U;
-                        (void)app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1);
-
-                        app_logic_relay_UpdateAppUI();
-                        ESP_LOGI(TAG, "Trạng thái tĩnh: Cảm biến báo Cửa MỞ (100%%)");
+                        ESP_LOGW(TAG, "Va chạm khi ĐANG XUỐNG -> Dừng relay, chốt ĐÓNG HOÀN TOÀN (0%%)");
                     }
+
+                    /* Đưa hướng về Tĩnh */
+                    g_i8Direction = 0;
+
+                    /* Báo cáo telemetry & Cập nhật UI App Vconnex */
+                    (void)app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1);
+                    app_logic_relay_UpdateAppUI();
                     break;
                 }
 

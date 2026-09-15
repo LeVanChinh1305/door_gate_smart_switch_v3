@@ -50,6 +50,12 @@ esp_err_t app_logic_mqtt_publisher_ReportStatus(void);
 
 
 esp_err_t app_logic_mqtt_publisher_ReportScheduleList(void);
+
+
+/**
+ * @brief   Phản hồi thông số cấu hình cảm biến (CmdGetSensorConfig) lên Cloud/App
+ */
+esp_err_t app_logic_mqtt_publisher_ReportSensorConfig(const char *pcCmdName);
 #ifdef __cplusplus
 }
 #endif

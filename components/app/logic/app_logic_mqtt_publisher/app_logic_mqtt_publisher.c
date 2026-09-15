@@ -60,7 +60,7 @@ esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gat
              "{\"param\":\"gate_3\",\"value\":%u},"
              "{\"param\":\"open_level\",\"value\":%u},"
              "{\"param\":\"gate_open_gap\",\"value\":%u},"
-             "{\"param\":\"sensor\",\"value\":1}]",
+             "{\"param\":\"sensor\",\"value\":0}]", // đang để mặc định 
                 (unsigned int)u8Gate1, 
                 (unsigned int)u8Gate2, 
                 (unsigned int)u8Gate3, 
@@ -420,6 +420,63 @@ esp_err_t app_logic_mqtt_publisher_ReportScheduleList(void)
         free(pcResponseJson);
     }
 
+    cJSON_Delete(jsRoot);
+    return eRet;
+}
+
+esp_err_t app_logic_mqtt_publisher_ReportSensorConfig(const char *pcCmdName)
+{
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
+    if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
+        return ESP_FAIL;
+    }
+
+    const char *pcResponseName = (pcCmdName != NULL) ? pcCmdName : "CmdGetSensorConfig";
+
+    app_nvs_sensor_config_t sSensorCfg;
+    if (app_nvs_GetSensorConfig(&sSensorCfg) != ESP_OK) {
+        memset(&sSensorCfg, 0, sizeof(sSensorCfg));
+    }
+
+    cJSON *jsRoot = cJSON_CreateObject();
+    if (jsRoot == NULL) return ESP_FAIL;
+
+    /* Đưa trực tiếp tất cả các trường ra root JSON */
+    cJSON_AddStringToObject(jsRoot, "name", pcResponseName);
+    cJSON_AddNumberToObject(jsRoot, "devT", psConfig->dev_type);
+    cJSON_AddStringToObject(jsRoot, "devExtAddr", psConfig->dev_ext_addr);
+    cJSON_AddNumberToObject(jsRoot, "sensorType", sSensorCfg.u8SensorType);
+
+    /* Mảng MAC sensor (nếu là loại BLE) */
+    if (sSensorCfg.u8SensorType == 2) {
+        cJSON *jsMacArray = cJSON_CreateArray();
+        for (int i = 0; i < 6; i++) {
+            cJSON_AddItemToArray(jsMacArray, cJSON_CreateNumber(sSensorCfg.au8SensorMac[i]));
+        }
+        cJSON_AddItemToObject(jsRoot, "sensorMac", jsMacArray);
+        cJSON_AddNumberToObject(jsRoot, "pairMode", sSensorCfg.u8PairMode);
+    }
+
+    /* Chi gửi sensorReset nếu bằng 1 */
+    if (sSensorCfg.u8SensorReset == 1) {
+        cJSON_AddNumberToObject(jsRoot, "sensorReset", 1);
+    }
+
+    if (sSensorCfg.u8SensorType == 1) {
+        sSensorCfg.u8SensorAntiStuck = 0;
+    }
+
+    cJSON_AddNumberToObject(jsRoot, "sensorAntiStuck", sSensorCfg.u8SensorAntiStuck);
+    cJSON_AddNumberToObject(jsRoot, "sensorAction", sSensorCfg.u8SensorAction);
+    cJSON_AddNumberToObject(jsRoot, "sensorWarning", sSensorCfg.u8SensorWarning);
+
+    char *pcResponseJson = cJSON_PrintUnformatted(jsRoot);
+    esp_err_t eRet = ESP_FAIL;
+    if (pcResponseJson != NULL) {
+        ESP_LOGI(TAG, "=> ReportSensorConfig JSON phẳng: %s", pcResponseJson);
+        eRet = app_logic_mqtt_publisher_SendResponse(pcResponseJson);
+        free(pcResponseJson);
+    }
     cJSON_Delete(jsRoot);
     return eRet;
 }

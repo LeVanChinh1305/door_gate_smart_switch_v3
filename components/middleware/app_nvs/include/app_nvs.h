@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #define DF_APP_STORAGE_KEY_EXTRA_CONFIG "extra_cfg"
+#define DF_APP_STORAGE_KEY_SENSOR_CFG   "sensor_cfg"
 
 #define DF_APP_STORAGE_NVS_NAMESPACE       "app_storage" // vị trí lưu trữ trong NVS
 #define DF_APP_STORAGE_KEY_PROVISIONED     "provisioned" // đánh dấu đã lưu cấu hình Wi-Fi
@@ -184,6 +185,23 @@ esp_err_t app_nvs_ClearExtraConfig(void);
  * @brief Khai báo prototype hàm gán giá trị ExtraConfig mặc định
  */
 void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config);
+
+
+typedef struct {
+  uint8_t u8SensorType;        /* 0: NONE, 1: WIRE, 2: BLE */
+  uint8_t au8SensorMac[6];     /* Địa chỉ MAC của cảm biến BLE (6 bytes) */
+  uint8_t u8SensorReset;       /* 1: Xóa cảm biến, 0: Bình thường */
+  uint8_t u8PairMode;          /* 0: Finish, 1: Start, 2: MAC Valid, 3: MAC Invalid */
+  uint8_t au8PairAddr[6];      /* MAC phát hiện được khi pair */
+  uint8_t u8SensorAntiStuck;   /* 0: Không cảm biến, 1: Thường đóng (NC), 2: Thường mở (NO) */
+  uint8_t u8SensorAction;      /* 1: Dừng cửa khi kích hoạt, 0: Bỏ qua */
+  uint8_t u8SensorWarning;     /* 1: Báo động khi kích hoạt, 0: Bỏ qua */
+} app_nvs_sensor_config_t;
+
+/* Thêm hàm ghi/đọc NVS */
+esp_err_t app_nvs_SaveSensorConfig(const app_nvs_sensor_config_t *psConfig);
+esp_err_t app_nvs_GetSensorConfig(app_nvs_sensor_config_t *psConfig);
+esp_err_t app_nvs_InitSensorConfigDefault(void);
 
 #ifdef __cplusplus
 }

@@ -451,6 +451,50 @@ static void app_logic_mqtt_HandleDeleteDevice(const char *pcCmdName)
     esp_restart();
 }
 
+
+static void app_logic_mqtt_HandleSetSensorConfig(const cJSON *jsValue)
+{
+    if (jsValue == NULL) {
+        ESP_LOGE(TAG, "Lỗi: Payload CmdSetSensorConfig bị NULL!");
+        return;
+    }
+
+    app_nvs_sensor_config_t sCfg;
+    if (app_nvs_GetSensorConfig(&sCfg) != ESP_OK) {
+        memset(&sCfg, 0, sizeof(sCfg));
+    }
+
+    const cJSON *jsSensorType = cJSON_GetObjectItem(jsValue, "sensorType");
+    if (cJSON_IsNumber(jsSensorType)) sCfg.u8SensorType = (uint8_t)jsSensorType->valueint;
+
+    const cJSON *jsSensorMac = cJSON_GetObjectItem(jsValue, "sensorMac");
+    if (cJSON_IsArray(jsSensorMac)) {
+        for (int i = 0; i < 6 && i < cJSON_GetArraySize(jsSensorMac); i++) {
+            sCfg.au8SensorMac[i] = (uint8_t)cJSON_GetArrayItem(jsSensorMac, i)->valueint;
+        }
+    }
+
+    const cJSON *jsSensorReset = cJSON_GetObjectItem(jsValue, "sensorReset");
+    if (cJSON_IsNumber(jsSensorReset)) sCfg.u8SensorReset = (uint8_t)jsSensorReset->valueint;
+
+    const cJSON *jsSensorAntiStuck = cJSON_GetObjectItem(jsValue, "sensorAntiStuck");
+    if (cJSON_IsNumber(jsSensorAntiStuck)) sCfg.u8SensorAntiStuck = (uint8_t)jsSensorAntiStuck->valueint;
+
+    const cJSON *jsSensorAction = cJSON_GetObjectItem(jsValue, "sensorAction");
+    if (cJSON_IsNumber(jsSensorAction)) sCfg.u8SensorAction = (uint8_t)jsSensorAction->valueint;
+
+    const cJSON *jsSensorWarning = cJSON_GetObjectItem(jsValue, "sensorWarning");
+    if (cJSON_IsNumber(jsSensorWarning)) sCfg.u8SensorWarning = (uint8_t)jsSensorWarning->valueint;
+
+    /* Lưu cấu hình mới vào Flash NVS */
+    if (app_nvs_SaveSensorConfig(&sCfg) == ESP_OK) {
+        ESP_LOGI(TAG, "Lưu CmdSetSensorConfig vào NVS thành công!");
+    }
+
+    /* Gửi bản tin Ack / Phản hồi lại thông số hiện tại về cho App */
+    (void)app_logic_mqtt_publisher_ReportSensorConfig("CmdSetSensorConfig");
+}
+
 /**
  * @brief   Task nền chuyên trách nhận bản tin từ Queue, phân loại lệnh và điều phối xử lý.
  * @param   pArg Tham số truyền vào task (không sử dụng).
@@ -508,9 +552,7 @@ static void app_logic_mqtt_Task(void *pArg)
                         }else if(strcmp(pcCmdName, "CmdGetDeviceInfo") ==0){
                             ESP_LOGI(TAG, "-> khớp lệnh CmdGetDeviceInfo");
                             (void)app_logic_mqtt_publisher_ReportDeviceInfo();
-                        } else if(strcmp(pcCmdName, "CmdGetSensorConfig") ==0){
-                            ESP_LOGI(TAG, "-> khớp lệnh CmdGetSensorConfig");
-                        }else if (strcmp(pcCmdName, "CmdSetData") == 0) {
+                        } else if (strcmp(pcCmdName, "CmdSetData") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdSetData, tiến hành gọi hàm giải mã...");
                             app_logic_mqtt_HandleSetData(jsRoot);
                         }else if (strcmp(pcCmdName, "CmdAddSchedule") == 0 || strcmp(pcCmdName, "CmdUpdateSchedule") == 0) {
@@ -539,6 +581,12 @@ static void app_logic_mqtt_Task(void *pArg)
                         }else if (strcmp(pcCmdName, "CmdScheduleList") == 0) {
                             ESP_LOGI(TAG, "-> Khớp lệnh CmdScheduleList, phản hồi danh sách lịch hẹn...");
                             (void)app_logic_mqtt_publisher_ReportScheduleList();
+                        } else if (strcmp(pcCmdName, "CmdGetSensorConfig") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdGetSensorConfig");
+                            (void)app_logic_mqtt_publisher_ReportSensorConfig("CmdGetSensorConfig");
+                        } else if (strcmp(pcCmdName, "CmdSetSensorConfig") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdSetSensorConfig, đang cài đặt...");
+                            app_logic_mqtt_HandleSetSensorConfig(jsValue ? jsValue : jsRoot);
                         }else {
                             ESP_LOGW(TAG, "-> Lệnh MQTT chưa được định nghĩa: %s", pcCmdName);
                         }
