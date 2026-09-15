@@ -44,6 +44,12 @@ esp_err_t app_logic_mqtt_publisher_ReportScheduleResult(const char *pcCmdName, i
 
 
 esp_err_t app_logic_mqtt_publisher_ReportExtraConfig(void);
+
+
+esp_err_t app_logic_mqtt_publisher_ReportStatus(void);
+
+
+esp_err_t app_logic_mqtt_publisher_ReportScheduleList(void);
 #ifdef __cplusplus
 }
 #endif

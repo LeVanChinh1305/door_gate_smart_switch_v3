@@ -533,6 +533,12 @@ static void app_logic_mqtt_Task(void *pArg)
                             /* Phản hồi bản tin ACK về broker theo đúng chuẩn Vconnex (50000: Thành công, 50004: Thất bại) */
                             int i32ErrorCode = (eOtaRet == ESP_OK) ? 50000 : 50004;
                             (void)app_logic_mqtt_publisher_ReportScheduleResult("CmdStartOta", 0, i32ErrorCode);
+                        }else if(strcmp(pcCmdName, "CmdGetStatus") ==0){
+                            ESP_LOGI(TAG, "-> khớp lệnh CmdGetStatus");
+                            (void)app_logic_mqtt_publisher_ReportStatus();
+                        }else if (strcmp(pcCmdName, "CmdScheduleList") == 0) {
+                            ESP_LOGI(TAG, "-> Khớp lệnh CmdScheduleList, phản hồi danh sách lịch hẹn...");
+                            (void)app_logic_mqtt_publisher_ReportScheduleList();
                         }else {
                             ESP_LOGW(TAG, "-> Lệnh MQTT chưa được định nghĩa: %s", pcCmdName);
                         }

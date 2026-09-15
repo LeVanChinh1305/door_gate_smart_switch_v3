@@ -331,3 +331,95 @@ esp_err_t app_logic_mqtt_publisher_ReportExtraConfig(void)
     cJSON_Delete(jsRoot);
     return eRet;
 }
+
+
+esp_err_t app_logic_mqtt_publisher_ReportStatus(void){
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
+    if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
+        return ESP_FAIL;
+    }
+
+     char acResponse[512];
+    snprintf(acResponse, sizeof(acResponse),
+             "{"
+                "\"name\":\"CmdGetStatus\","
+                "\"devT\":%u,"
+                "\"devExtAddr\":\"%s\","
+             "}",
+             (unsigned int)psConfig->dev_type,
+             psConfig->dev_ext_addr
+            );
+
+    /* 5. Đẩy bản tin lên broker */
+    return app_logic_mqtt_publisher_SendResponse(acResponse);
+}
+
+
+
+esp_err_t app_logic_mqtt_publisher_ReportScheduleList(void)
+{
+    const app_nvs_device_config_t *psConfig = app_mqtt_GetDeviceConfig();
+    if (psConfig == NULL || psConfig->mqtt_pub[0] == '\0') {
+        ESP_LOGE(TAG, "Lỗi: Cấu hình thiết bị hoặc MQTT pub topic không hợp lệ");
+        return ESP_FAIL;
+    }
+
+    /* 1. Đọc danh sách lịch hiện có trong NVS */
+    app_schedule_item_t asSchedules[DF_MAX_SCHEDULES];
+    uint8_t u8Count = 0;
+    (void)app_nvs_GetAllSchedules(asSchedules, &u8Count);
+
+    /* 2. Tạo cJSON Root Object */
+    cJSON *jsRoot = cJSON_CreateObject();
+    if (jsRoot == NULL) {
+        return ESP_FAIL;
+    }
+
+    cJSON_AddStringToObject(jsRoot, "name", "CmdScheduleList");
+    cJSON_AddNumberToObject(jsRoot, "devT", psConfig->dev_type);
+    cJSON_AddStringToObject(jsRoot, "devExtAddr", psConfig->dev_ext_addr);
+
+    /* Lấy Timestamp hiện tại (giây) */
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    uint64_t u64Timestamp = (uint64_t)tv.tv_sec;
+    cJSON_AddNumberToObject(jsRoot, "timeStamp", (double)u64Timestamp);
+
+    /* 3. Đóng gói mảng devV */
+    cJSON *jsDevV = cJSON_CreateArray();
+    if (jsDevV != NULL) {
+        /* max_skd: Số lượng lịch tối đa thiết bị hỗ trợ */
+        cJSON *jsMaxSkd = cJSON_CreateObject();
+        cJSON_AddStringToObject(jsMaxSkd, "param", "max_skd");
+        cJSON_AddNumberToObject(jsMaxSkd, "value", DF_MAX_SCHEDULES);
+        cJSON_AddItemToArray(jsDevV, jsMaxSkd);
+
+        /* skd_count: Số lượng lịch thực tế đang cài đặt */
+        cJSON *jsSkdCount = cJSON_CreateObject();
+        cJSON_AddStringToObject(jsSkdCount, "param", "skd_count");
+        cJSON_AddNumberToObject(jsSkdCount, "value", u8Count);
+        cJSON_AddItemToArray(jsDevV, jsSkdCount);
+
+        /* Thêm từng ID lịch đang có */
+        for (uint8_t i = 0; i < u8Count; i++) {
+            cJSON *jsIdItem = cJSON_CreateObject();
+            cJSON_AddStringToObject(jsIdItem, "param", "id");
+            cJSON_AddNumberToObject(jsIdItem, "value", asSchedules[i].u32Id);
+            cJSON_AddItemToArray(jsDevV, jsIdItem);
+        }
+
+        cJSON_AddItemToObject(jsRoot, "devV", jsDevV);
+    }
+
+    /* 4. Chuyển thành chuỗi Unformatted và Publish lên MQTT */
+    char *pcResponseJson = cJSON_PrintUnformatted(jsRoot);
+    esp_err_t eRet = ESP_FAIL;
+    
+    if (pcResponseJson != NULL) {
+        eRet = app_logic_mqtt_publisher_SendResponse(pcResponseJson);
+        free(pcResponseJson);
+    }
+
+    cJSON_Delete(jsRoot);
+    return eRet;
+}
