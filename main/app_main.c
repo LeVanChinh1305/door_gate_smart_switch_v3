@@ -65,6 +65,34 @@ static esp_err_t app_main_StartMqttFromNvs(void)
     return ESP_ERR_NOT_FOUND;
 }
 
+/**
+ * @brief   Task ngắn hạn: tắt BluFi (app_blufi_Deinit() có thể mất >1s và tự
+ *          gọi app_mqtt_StartInit() -> app_sntp_WaitForSync() chờ tới 8s).
+ * @note    KHÔNG chạy trên main task vì main task đã đăng ký Task Watchdog
+ *          5s (esp_task_wdt_add(NULL)); chạy trực tiếp ở đó sẽ khiến main
+ *          task không kịp gọi esp_task_wdt_reset() và bị TWDT reset thiết bị.
+ */
+static void app_main_ExitBlufiTask(void *pvParameters)
+{
+    (void)pvParameters;
+    ESP_LOGI(TAG, "Thoát chế độ CONNECT_AUTO -> Tắt Bluetooth & Trả RAM về Heap...");
+    (void)app_blufi_Deinit();
+    vTaskDelete(NULL);
+}
+
+/**
+ * @brief   Task ngắn hạn: khởi động lại MQTT từ NVS sau khi thoát CONNECT_MANUAL.
+ * @note    Lý do tách task giống hệt app_main_ExitBlufiTask ở trên:
+ *          app_mqtt_StartInit() có thể block tới 8s trong app_sntp_WaitForSync().
+ */
+static void app_main_RestartMqttTask(void *pvParameters)
+{
+    (void)pvParameters;
+    ESP_LOGI(TAG, "Kích hoạt lại MQTT Client từ NVS...");
+    (void)app_main_StartMqttFromNvs();
+    vTaskDelete(NULL);
+}
+
 
 void app_main(void) {
   /* Kiểm tra nguyên nhân khởi động lại (đặc biệt là do Task Watchdog) */
@@ -237,9 +265,12 @@ void app_main(void) {
     }
     /* TỰ ĐỘNG DỌN DẸP & THU HỒI ~50KB RAM KHI THOÁT CHẾ ĐỘ BLUFI */
     else if (s_bIsBlufiInited) {
-      ESP_LOGI(TAG, "Thoát chế độ CONNECT_AUTO -> Tắt Bluetooth & Trả RAM về Heap...");
-      (void)app_blufi_Deinit();
       s_bIsBlufiInited = false; /* Reset cờ để sẵn sàng cho lần bấm giữ 3s tiếp theo */
+      /* Chạy trên task riêng: app_blufi_Deinit() có thể mất >1s và tự kích
+       * hoạt app_mqtt_StartInit() (chờ SNTP tới 8s) -> nếu chạy thẳng ở đây,
+       * main task (đã đăng ký TWDT 5s) không kịp esp_task_wdt_reset() và bị
+       * watchdog reset thiết bị. */
+      xTaskCreate(app_main_ExitBlufiTask, "exit_blufi_task", 4096, NULL, 5, NULL);
     }
     
     /* 2. Kích hoạt UDP khi ở mode CONNECT_MANUAL và chưa Init */
@@ -255,8 +286,9 @@ void app_main(void) {
       (void)app_udp_Deinit();
       s_bIsUdpInited = false;
       if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
-          ESP_LOGI(TAG, "Kích hoạt lại MQTT Client từ NVS...");
-          (void)app_main_StartMqttFromNvs();
+          /* Chạy trên task riêng vì app_main_StartMqttFromNvs() có thể block
+           * tới 8s trong app_sntp_WaitForSync() -> tương tự app_main_ExitBlufiTask. */
+          xTaskCreate(app_main_RestartMqttTask, "restart_mqtt_task", 4096, NULL, 5, NULL);
       }
     }
 
