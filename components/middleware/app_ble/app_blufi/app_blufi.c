@@ -496,18 +496,69 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
     }
 }
 
-static void blufi_event_callback_adapter(int event, void *param) {
-    blufi_event_callback((esp_blufi_cb_event_t)event, (esp_blufi_cb_param_t *)param);
+static esp_blufi_callbacks_t s_sBlufiCallbacks = {
+    .event_cb = blufi_event_callback,
+    .negotiate_data_handler = NULL,
+    .encrypt_func = NULL,
+    .decrypt_func = NULL,
+    .checksum_func = NULL,
+};
+
+static esp_err_t blufi_profile_init(void) {
+    esp_err_t ret = esp_blufi_register_callbacks(&s_sBlufiCallbacks);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "esp_blufi_register_callbacks thất bại: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    int rc = esp_blufi_gatt_svr_init();
+    if (rc != 0) {
+        ESP_LOGE(TAG, "esp_blufi_gatt_svr_init thất bại: %d", rc);
+        return ESP_FAIL;
+    }
+
+    esp_blufi_btc_init();
+    return ESP_OK;
 }
+
+static esp_err_t blufi_profile_deinit(void) {
+    esp_blufi_gatt_svr_deinit();
+    esp_blufi_profile_deinit();
+    esp_blufi_btc_deinit();
+    return ESP_OK;
+}
+
+static esp_err_t blufi_profile_start_adv(void) {
+    esp_blufi_adv_start();
+    return ESP_OK;
+}
+
+static esp_err_t blufi_profile_stop_adv(void) {
+    esp_blufi_adv_stop();
+    return ESP_OK;
+}
+
+static void blufi_profile_on_sync(void) {
+    (void)esp_blufi_profile_init();
+}
+
+static const app_ble_profile_t s_sBlufiProfile = {
+    .name = "BLUFI",
+    .profile_init = blufi_profile_init,
+    .profile_deinit = blufi_profile_deinit,
+    .on_sync = blufi_profile_on_sync,
+    .on_reset = NULL,
+    .gatts_register_cb = esp_blufi_gatt_svr_register_cb,
+    .start_adv = blufi_profile_start_adv,
+    .stop_adv = blufi_profile_stop_adv,
+};
 
 esp_err_t app_blufi_Init(void) {
     app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
 
-    app_ble_manager_RegisterBlufiCallback(blufi_event_callback_adapter);
-
-    esp_err_t ret = app_ble_manager_Init();
+    esp_err_t ret = app_ble_manager_Init(&s_sBlufiProfile);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Khởi tạo BLE Manager thất bại: %s", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "Khởi tạo BLE Manager cho BluFi thất bại: %s", esp_err_to_name(ret));
         return ret;
     }
 
