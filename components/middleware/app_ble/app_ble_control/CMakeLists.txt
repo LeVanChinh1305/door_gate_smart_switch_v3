@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS 
+        "app_ble_control.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        bt
+        app_ble_manager
+        log
+)
