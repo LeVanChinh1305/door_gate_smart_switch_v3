@@ -14,5 +14,6 @@ idf_component_register(
         log app_mqtt 
         app_led_state 
         app_sntp
+        app_ble_manager
     PRIV_REQUIRES bt
 )
