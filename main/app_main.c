@@ -21,6 +21,7 @@
 #include "app_logic_schedule.h"
 #include "app_logic_extra_config.h"
 #include "app_udp.h"
+#include "app_ble_control.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -30,6 +31,7 @@ static app_nvs_device_config_t sDeviceConfig;
 
 static bool s_bIsBlufiInited = false;
 static bool s_bIsUdpInited = false; 
+static bool s_bIsBleControlInited = false;
 
 /**
  * @brief Đọc cấu hình từ NVS và khởi tạo dịch vụ MQTT Client.
@@ -75,8 +77,21 @@ static esp_err_t app_main_StartMqttFromNvs(void)
 static void app_main_ExitBlufiTask(void *pvParameters)
 {
     (void)pvParameters;
-    ESP_LOGI(TAG, "Thoát chế độ CONNECT_AUTO -> Tắt Bluetooth & Trả RAM về Heap...");
+    ESP_LOGI(TAG, "Thoát chế độ CONNECT_AUTO -> Tắt BluFi & Trả RAM về Heap...");
     (void)app_blufi_Deinit();
+
+    /* Nếu sau khi thoát BluFi thiết bị đang ở chế độ NORMAL -> Tự động bật BLE Control */
+    if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
+        if (!s_bIsBleControlInited) {
+            ESP_LOGI(TAG, "Đã thoát BluFi và ở chế độ NORMAL -> Khởi động BLE Control Profile...");
+            esp_err_t ret = app_ble_control_Init();
+            if (ret == ESP_OK) {
+                s_bIsBleControlInited = true;
+            } else {
+                ESP_LOGE(TAG, "Khởi động BLE Control Profile thất bại: %s", esp_err_to_name(ret));
+            }
+        }
+    }
     vTaskDelete(NULL);
 }
 
@@ -220,6 +235,14 @@ void app_main(void) {
       ESP_LOGI(TAG, "Thiết bị đang ở chế độ hoạt động bình thường, kiểm tra kết nối mạng...");
       app_led_state_SetState(E_LED_STATE_LOCKED);
       
+      /* Khởi động BLE Control cho chế độ NORMAL */
+      if (!s_bIsBleControlInited) {
+          ESP_LOGI(TAG, "Khởi động BLE Control Profile cho chế độ NORMAL...");
+          if (app_ble_control_Init() == ESP_OK) {
+              s_bIsBleControlInited = true;
+          }
+      }
+
       if (app_wifi_WaitForConnect(10000U)) {
           ESP_LOGI(TAG, "Kết nối Wi-Fi thành công!");
           (void)app_main_StartMqttFromNvs();
@@ -250,8 +273,15 @@ void app_main(void) {
 
     /* 1. Kích hoạt BluFi khi ở mode CONNECT_AUTO và chưa Init */
     if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
+      /* Tắt BLE Control nếu đang chạy để nhường tài nguyên phần cứng cho BluFi */
+      if (s_bIsBleControlInited) {
+        ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_AUTO -> Tắt BLE Control để nhường tài nguyên...");
+        (void)app_ble_control_Deinit();
+        s_bIsBleControlInited = false;
+      }
+
       if (!s_bIsBlufiInited) {
-        ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_AUTO -> Tắt MQTT, udp Khởi tạo BluFi...");
+        ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_AUTO -> Tắt MQTT, UDP và Khởi tạo BluFi...");
         (void)app_mqtt_Stop();
         if (s_bIsUdpInited) {
           (void)app_udp_Deinit();
@@ -266,14 +296,19 @@ void app_main(void) {
     else if (s_bIsBlufiInited) {
       s_bIsBlufiInited = false; /* Reset cờ để sẵn sàng cho lần bấm giữ 3s tiếp theo */
       /* Chạy trên task riêng: app_blufi_Deinit() có thể mất >1s và tự kích
-       * hoạt app_mqtt_StartInit() (chờ SNTP tới 8s) -> nếu chạy thẳng ở đây,
-       * main task (đã đăng ký TWDT 5s) không kịp esp_task_wdt_reset() và bị
-       * watchdog reset thiết bị. */
+       * hoạt app_mqtt_StartInit(). Sau đó tự động kích hoạt BLE Control nếu ở NORMAL */
       xTaskCreate(app_main_ExitBlufiTask, "exit_blufi_task", 4096, NULL, 5, NULL);
     }
     
     /* 2. Kích hoạt UDP khi ở mode CONNECT_MANUAL và chưa Init */
     if (app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
+      /* Tắt BLE Control nếu đang chạy */
+      if (s_bIsBleControlInited) {
+        ESP_LOGI(TAG, "Đang ở CONNECT_MANUAL -> Tắt BLE Control...");
+        (void)app_ble_control_Deinit();
+        s_bIsBleControlInited = false;
+      }
+
       if (!s_bIsUdpInited) {
         ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_MANUAL -> Khởi tạo UDP Socket...");
         s_bIsUdpInited = true;
@@ -288,6 +323,30 @@ void app_main(void) {
           /* Chạy trên task riêng vì app_main_StartMqttFromNvs() có thể block
            * tới 8s trong app_sntp_WaitForSync() -> tương tự app_main_ExitBlufiTask. */
           xTaskCreate(app_main_RestartMqttTask, "restart_mqtt_task", 4096, NULL, 5, NULL);
+      }
+    }
+
+    /* 3. Chế độ NORMAL: Đảm bảo BLE Control luôn chạy nếu không trong giai đoạn chuyển giao */
+    if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
+      if (!s_bIsBleControlInited && !s_bIsBlufiInited) {
+        ESP_LOGI(TAG, "Thiết bị ở chế độ NORMAL -> Đảm bảo BLE Control Profile đang chạy...");
+        if (app_ble_control_Init() == ESP_OK) {
+          s_bIsBleControlInited = true;
+        }
+      }
+    }
+
+    /* 4. Chế độ UNCONNECTED (Chờ kết nối): TẮT CẢ HAI ĐỂ TIẾT KIỆM RAM & NĂNG LƯỢNG */
+    if (app_device_state_HasMode(DEVICE_MODE_UNCONNECTED)) {
+      if (s_bIsBleControlInited) {
+        ESP_LOGI(TAG, "Thiết bị ở chế độ chờ kết nối (UNCONNECTED) -> Tắt BLE Control...");
+        (void)app_ble_control_Deinit();
+        s_bIsBleControlInited = false;
+      }
+      if (s_bIsBlufiInited) {
+        ESP_LOGI(TAG, "Thiết bị ở chế độ chờ kết nối (UNCONNECTED) -> Tắt BluFi...");
+        s_bIsBlufiInited = false;
+        xTaskCreate(app_main_ExitBlufiTask, "exit_blufi_task", 4096, NULL, 5, NULL);
       }
     }
 
