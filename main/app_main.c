@@ -32,6 +32,7 @@ static app_nvs_device_config_t sDeviceConfig;
 static bool s_bIsBlufiInited = false;
 static bool s_bIsUdpInited = false; 
 static bool s_bIsBleControlInited = false;
+static bool s_bBleInitFailed = false;
 
 /**
  * @brief Đọc cấu hình từ NVS và khởi tạo dịch vụ MQTT Client.
@@ -79,19 +80,6 @@ static void app_main_ExitBlufiTask(void *pvParameters)
     (void)pvParameters;
     ESP_LOGI(TAG, "Thoát chế độ CONNECT_AUTO -> Tắt BluFi & Trả RAM về Heap...");
     (void)app_blufi_Deinit();
-
-    /* Nếu sau khi thoát BluFi thiết bị đang ở chế độ NORMAL -> Tự động bật BLE Control */
-    if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
-        if (!s_bIsBleControlInited) {
-            ESP_LOGI(TAG, "Đã thoát BluFi và ở chế độ NORMAL -> Khởi động BLE Control Profile...");
-            esp_err_t ret = app_ble_control_Init();
-            if (ret == ESP_OK) {
-                s_bIsBleControlInited = true;
-            } else {
-                ESP_LOGE(TAG, "Khởi động BLE Control Profile thất bại: %s", esp_err_to_name(ret));
-            }
-        }
-    }
     vTaskDelete(NULL);
 }
 
@@ -235,13 +223,13 @@ void app_main(void) {
       ESP_LOGI(TAG, "Thiết bị đang ở chế độ hoạt động bình thường, kiểm tra kết nối mạng...");
       app_led_state_SetState(E_LED_STATE_LOCKED);
       
-      /* Khởi động BLE Control cho chế độ NORMAL */
-      if (!s_bIsBleControlInited) {
-          ESP_LOGI(TAG, "Khởi động BLE Control Profile cho chế độ NORMAL...");
-          if (app_ble_control_Init() == ESP_OK) {
-              s_bIsBleControlInited = true;
-          }
-      }
+      // /* Khởi động BLE Control cho chế độ NORMAL */
+      // if (!s_bIsBleControlInited) {
+      //     ESP_LOGI(TAG, "Khởi động BLE Control Profile cho chế độ NORMAL...");
+      //     if (app_ble_control_Init() == ESP_OK) {
+      //         s_bIsBleControlInited = true;
+      //     }
+      // }
 
       if (app_wifi_WaitForConnect(10000U)) {
           ESP_LOGI(TAG, "Kết nối Wi-Fi thành công!");
@@ -291,6 +279,7 @@ void app_main(void) {
         s_bIsBlufiInited = true;
         (void)app_blufi_Init();
       }
+      s_bBleInitFailed = false;
     }
     /* TỰ ĐỘNG DỌN DẸP & THU HỒI ~50KB RAM KHI THOÁT CHẾ ĐỘ BLUFI */
     else if (s_bIsBlufiInited) {
@@ -314,6 +303,7 @@ void app_main(void) {
         s_bIsUdpInited = true;
         (void)app_udp_Init();
       }
+      s_bBleInitFailed = false;
     }
     else if (s_bIsUdpInited) {
       ESP_LOGI(TAG, "Thoát chế độ CONNECT_MANUAL -> Dừng UDP Socket...");
@@ -326,12 +316,22 @@ void app_main(void) {
       }
     }
 
-    /* 3. Chế độ NORMAL: Đảm bảo BLE Control luôn chạy nếu không trong giai đoạn chuyển giao */
-    if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
-      if (!s_bIsBleControlInited && !s_bIsBlufiInited) {
-        ESP_LOGI(TAG, "Thiết bị ở chế độ NORMAL -> Đảm bảo BLE Control Profile đang chạy...");
-        if (app_ble_control_Init() == ESP_OK) {
-          s_bIsBleControlInited = true;
+/* 3. Chế độ NORMAL: Chỉ chạy BLE Control nếu KHÔNG nằm trong các chế độ cấu hình (CONNECT_AUTO hoặc CONNECT_MANUAL) */
+    if (app_device_state_HasMode(DEVICE_MODE_NORMAL) && 
+        !app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO) && 
+        !app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) 
+    {
+      if (!s_bIsBleControlInited && !s_bIsBlufiInited && !s_bBleInitFailed) {
+        if (app_mqtt_IsConnected()) { 
+            ESP_LOGI(TAG, "MQTT đã kết nối xong -> Khởi động BLE Control Profile...");
+            esp_err_t err = app_ble_control_Init();
+            if (err == ESP_OK) {
+                s_bIsBleControlInited = true;
+                s_bBleInitFailed = false;
+            } else {
+                ESP_LOGE(TAG, "Khởi động BLE Control thất bại (%s), dừng thử lại để tránh crash!", esp_err_to_name(err));
+                s_bBleInitFailed = true; // Đánh dấu thất bại để KHÔNG gọi lại ở vòng lặp sau!
+            }
         }
       }
     }

@@ -150,7 +150,7 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         .credentials.authentication.password = g_sDeviceConfig.password,
         .task.stack_size = DF_TASK_STACK_MAX, 
         .task.priority = DF_TASK_PRIO_NORMAL,   
-        .buffer.size = 4096,
+        .buffer.size = 2048,
         .outbox.limit = 1024 * 4, // giới hạn bộ đệm Outbox tối đa 4KB 
         .network.timeout_ms = 20000,
     };
@@ -165,6 +165,9 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         ESP_LOGE(TAG, "Đăng ký MQTT event handler thất bại: %s", esp_err_to_name(eRet));
         return eRet;
     }
+
+    ESP_LOGI(TAG, "Free Heap trước khi connect TLS: %" PRIu32 " bytes", esp_get_free_heap_size());
+    ESP_LOGI(TAG, "Minimum Free Heap: %" PRIu32 " bytes", esp_get_minimum_free_heap_size());
     
     eRet = esp_mqtt_client_start(g_xMqttClient);
     if (eRet != ESP_OK) {

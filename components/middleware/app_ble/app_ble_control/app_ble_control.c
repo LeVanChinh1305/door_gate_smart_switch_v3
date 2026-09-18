@@ -209,13 +209,11 @@ static int gate_control_gap_event(struct ble_gap_event *event, void *arg) {
             break;
 
         case BLE_GAP_EVENT_SUBSCRIBE:
-            ESP_LOGI(TAG, "App đã đăng ký Subscribe/Notify (attr_handle=%u, cur_notify=%d)",
-                     event->subscribe.attr_handle, event->subscribe.cur_notify);
+            ESP_LOGI(TAG, "App đã đăng ký Subscribe/Notify (attr_handle=%u, cur_notify=%d)", event->subscribe.attr_handle, event->subscribe.cur_notify);
             break;
 
         case BLE_GAP_EVENT_MTU:
-            ESP_LOGI(TAG, "Cập nhật MTU: conn_handle=%u, MTU=%u",
-                     event->mtu.conn_handle, event->mtu.value);
+            ESP_LOGI(TAG, "Cập nhật MTU: conn_handle=%u, MTU=%u", event->mtu.conn_handle, event->mtu.value);
             break;
 
         default:

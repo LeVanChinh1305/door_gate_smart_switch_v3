@@ -94,6 +94,10 @@ static void app_logic_touch_Task(void *pArg)
                         ESP_LOGI(TAG, ">>> Giữ > 7s -> Xử lý kết nối thủ công");
                         /* TODO: Gọi hàm Config Manual */
                         app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+                        app_device_state_SetModeBit(DEVICE_MODE_NORMAL, false);
+                        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
+
+                        /* Chỉ giữ duy nhất bit CONNECT_MANUAL */
                         app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, true);
                         app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
                     } 
@@ -111,6 +115,8 @@ static void app_logic_touch_Task(void *pArg)
                         else{
                             ESP_LOGI(TAG, ">>> Giữ 3-7s -> Xử lý kết nối tự động bằng blufi");
                             app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+                            app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+                            app_device_state_SetModeBit(DEVICE_MODE_NORMAL, false);
                             app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, true);
                             app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
                         }
