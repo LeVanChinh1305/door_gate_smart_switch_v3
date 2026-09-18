@@ -51,7 +51,7 @@ static int gate_control_rx_access_cb(uint16_t conn_handle, uint16_t attr_handle,
 
         /* 1. Log độ dài */
         ESP_LOGI(TAG, "==================================================");
-        ESP_LOGI(TAG, "🔔 [BLE CONTROL] DỮ LIỆU NHẬN TỪ APP (Độ dài: %u bytes)", (unsigned int)len);
+        ESP_LOGI(TAG, "[BLE CONTROL] DỮ LIỆU NHẬN TỪ APP (Độ dài: %u bytes)", (unsigned int)len);
 
         /* 2. Log dạng HEX */
         char hex_str[3 * sizeof(rx_buf) + 1] = {0};
@@ -59,7 +59,7 @@ static int gate_control_rx_access_cb(uint16_t conn_handle, uint16_t attr_handle,
         for (uint16_t i = 0; i < read_len; i++) {
             hex_pos += snprintf(hex_str + hex_pos, sizeof(hex_str) - hex_pos, "%02X ", rx_buf[i]);
         }
-        ESP_LOGI(TAG, "   👉 HEX   : %s", hex_str);
+        ESP_LOGI(TAG, "   HEX   : %s", hex_str);
 
         /* 3. Log dạng STRING (nếu chứa các ký tự ASCII đọc được) */
         bool is_printable = true;
@@ -70,9 +70,9 @@ static int gate_control_rx_access_cb(uint16_t conn_handle, uint16_t attr_handle,
             }
         }
         if (is_printable) {
-            ESP_LOGI(TAG, "   👉 STRING: \"%s\"", (char *)rx_buf);
+            ESP_LOGI(TAG, "   STRING: \"%s\"", (char *)rx_buf);
         } else {
-            ESP_LOGI(TAG, "   👉 STRING: (Chứa binary/non-printable data)");
+            ESP_LOGI(TAG, "   STRING: (Chứa binary/non-printable data)");
         }
         ESP_LOGI(TAG, "==================================================");
 
