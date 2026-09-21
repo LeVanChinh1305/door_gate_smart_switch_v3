@@ -21,6 +21,7 @@
 #include "app_logic_schedule.h"
 #include "app_logic_extra_config.h"
 #include "app_udp.h"
+#include "app_ble_mesh.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -30,6 +31,7 @@ static app_nvs_device_config_t sDeviceConfig;
 
 static bool s_bIsBlufiInited = false;
 static bool s_bIsUdpInited = false; 
+static bool s_bIsMeshInited = false; 
 
 /**
  * @brief Đọc cấu hình từ NVS và khởi tạo dịch vụ MQTT Client.
@@ -289,6 +291,19 @@ void app_main(void) {
            * tới 8s trong app_sntp_WaitForSync() -> tương tự app_main_ExitBlufiTask. */
           xTaskCreate(app_main_RestartMqttTask, "restart_mqtt_task", 4096, NULL, 5, NULL);
       }
+    }
+    /* 3. BLE Mesh khi ở chế độ NORMAL */
+    if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
+        if (!s_bIsMeshInited) {
+            ESP_LOGI(TAG, "Chế độ NORMAL → Khởi tạo BLE Mesh...");
+            s_bIsMeshInited = true;
+            (void)app_ble_mesh_Init();
+        }
+    }
+    else if (s_bIsMeshInited) {
+        ESP_LOGI(TAG, "Thoát NORMAL → Tắt BLE Mesh...");
+        s_bIsMeshInited = false;
+        (void)app_ble_mesh_Deinit();
     }
 
     vTaskDelay(pdMS_TO_TICKS(1000U));
