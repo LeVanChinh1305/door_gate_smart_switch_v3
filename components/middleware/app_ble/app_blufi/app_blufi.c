@@ -15,6 +15,7 @@
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 
@@ -39,10 +40,9 @@ static app_nvs_device_config_t g_sCurrentDeviceConfig = {0};
 static const char *TAG = "APP_BLUFI";
 
 static void blufi_delayed_deinit_task(void *pvParameters) {
-    vTaskDelay(pdMS_TO_TICKS(1000)); /* Chờ 1 giây cho BLE truyền xong response */
-    ESP_LOGI(TAG, "Timer hết hạn -> Kích hoạt Deinit BluFi tự động");
-    (void)app_blufi_Deinit();
-    vTaskDelete(NULL);
+    vTaskDelay(pdMS_TO_TICKS(1000)); /* Chờ 1 giây cho BLE truyền xong response rồi restart */
+    ESP_LOGI(TAG, "BluFi: Đã lưu cấu hình vào NVS -> Khởi động lại thiết bị...");
+    esp_restart();
 }
 
 static void set_string_field(char *dest, size_t dest_size, const cJSON *item) {
@@ -423,13 +423,8 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                             }
                             if (status_code == 50000) {
                                 const esp_err_t eErr = app_nvs_SaveDeviceConfig(&g_sCurrentDeviceConfig);
-                                if (eErr == ESP_OK) {
-                                    app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
-                                    app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
-                                    app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
-
-                                    app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
-                                    app_led_state_SetState(E_LED_STATE_LOCKED);
+                                if (eErr != ESP_OK) {
+                                    status_code = 50005; /* Lỗi lưu NVS */
                                 }
                             }
                         } else {
@@ -445,8 +440,7 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                                     ESP_LOGI(TAG, "=> TẦNG 1: Đã nạp thành công giờ từ App cho RTC: %lld", (long long)js_timestamp->valueint);
                                 }
                             }
-                            g_bShutdownAfterDisconnect = true;
-                            ESP_LOGI(TAG, "Đã lưu CmdSetDeviceConfig -> Chờ App ngắt kết nối BLE");
+                            ESP_LOGI(TAG, "Đã lưu CmdSetDeviceConfig vào NVS -> Khởi động lại sau 1s...");
                             xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
                         }
                     }
@@ -462,15 +456,9 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                             dev_t = (g_sCurrentDeviceConfig.dev_type != 0) ? g_sCurrentDeviceConfig.dev_type : DF_BLUFI_DEVICE_TYPE_DEFAULT;
                         }
 
-                        app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
-                        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
-                        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
-                        app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
-                        app_led_state_SetState(E_LED_STATE_LOCKED);
-
                         send_response_exit_configuration(dev_t, cDeviceAddress, 50000);
 
-                        g_bShutdownAfterDisconnect = true;
+                        ESP_LOGI(TAG, "CmdExitConfiguration -> Khởi động lại sau 1s...");
                         xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
                     }
 

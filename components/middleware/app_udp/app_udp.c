@@ -7,6 +7,7 @@
 #include "app_nvs.h"
 #include "app_wifi.h"
 #include "app_device_state.h"
+#include "esp_system.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -589,11 +590,9 @@ static void app_udp_Task(void *pvArg)
         }
 
         if (bExitRequested) {
-            ESP_LOGI(TAG, "Nhận yêu cầu kết thúc cấu hình -> dừng UDP provisioning và chuyển về NORMAL");
-            g_bUdpRunning = false;
-            app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
-            app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
-            app_led_state_SetState(E_LED_STATE_LOCKED);
+            ESP_LOGI(TAG, "Nhận yêu cầu kết thúc cấu hình -> Đã lưu NVS, đang khởi động lại thiết bị...");
+            vTaskDelay(pdMS_TO_TICKS(500)); /* Chờ 500ms để response UDP được gửi xong */
+            esp_restart();
         }
     }
 

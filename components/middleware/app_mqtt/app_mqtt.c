@@ -14,6 +14,7 @@
 #include "esp_crt_bundle.h"
 #include "app_logic_mqtt.h"
 #include "app_sntp.h"
+#include "esp_heap_caps.h" 
 
 static esp_mqtt_client_handle_t g_xMqttClient = NULL;
 static bool g_bIsConnected = false;
@@ -54,6 +55,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT đã kết nối với broker");
+        ESP_LOGI("HEAP", "MQTT Connected - Free heap: %u", (unsigned)esp_get_free_heap_size());
         g_bIsConnected = true;
 
         int i32MsgId = esp_mqtt_client_subscribe(g_xMqttClient, g_sDeviceConfig.mqtt_sub, 1);
@@ -88,6 +90,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 
     case MQTT_EVENT_ERROR:
         ESP_LOGE(TAG, "MQTT Event Error");
+        ESP_LOGE("HEAP", "MQTT Error - Free heap: %u", (unsigned)esp_get_free_heap_size());
+        ESP_LOGE("HEAP", "Largest block: %u",
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
         if (pEvent->error_handle != NULL) {
             ESP_LOGE(TAG, "MQTT error_type=%d tls_esp_err=0x%x sock_errno=%d (%s)",
                      pEvent->error_handle->error_type,
@@ -120,6 +125,11 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
     }
     g_sDeviceConfig = *pDeviceConfig; 
 
+    /* ===== LOG HEAP TRƯỚC KHI LÀM GÌ ===== */
+    ESP_LOGI("HEAP", "Trước StartInit - Free heap: %u bytes", (unsigned)esp_get_free_heap_size());
+    ESP_LOGI("HEAP", "Trước StartInit - Largest block: %u bytes",
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+
     /* TẦNG 2: Chờ SNTP đồng bộ ngầm tối đa 8 giây */
     ESP_LOGI(TAG, "Đang chờ kiểm tra đồng bộ giờ SNTP Tầng 2...");
     if (!app_sntp_WaitForSync(8000U)) {
@@ -143,6 +153,11 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
     ESP_LOGI(TAG, "MQTT publish topic: %s", g_sDeviceConfig.mqtt_pub);
     ESP_LOGI(TAG, "MQTT alert topic: %s", g_sDeviceConfig.mqtt_alert);
 
+    /* ===== LOG HEAP TRƯỚC KHI TẠO CLIENT ===== */
+    ESP_LOGI("HEAP", "Trước esp_mqtt_client_init - Free heap: %u", (unsigned)esp_get_free_heap_size());
+    ESP_LOGI("HEAP", "Trước esp_mqtt_client_init - Largest block: %u",
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+
     esp_mqtt_client_config_t sMqttCfg = {
         .broker.address.uri = g_sDeviceConfig.broker,
         .broker.verification.crt_bundle_attach = esp_crt_bundle_attach,
@@ -160,6 +175,12 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         ESP_LOGE(TAG, "khởi tạo MQTT client thất bại");
         return ESP_FAIL;
     }
+
+    /* ===== LOG HEAP SAU KHI TẠO CLIENT ===== */
+    ESP_LOGI("HEAP", "Sau esp_mqtt_client_init - Free heap: %u", (unsigned)esp_get_free_heap_size());
+    ESP_LOGI("HEAP", "Sau esp_mqtt_client_init - Largest block: %u",
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
+
     esp_err_t eRet = esp_mqtt_client_register_event(g_xMqttClient, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
     if (eRet != ESP_OK) {
         ESP_LOGE(TAG, "Đăng ký MQTT event handler thất bại: %s", esp_err_to_name(eRet));
@@ -171,7 +192,7 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         ESP_LOGE(TAG, "Khởi động MQTT Client thất bại: %s", esp_err_to_name(eRet));
         return eRet;
     }
-
+    ESP_LOGI("HEAP", "Sau esp_mqtt_client_start - Free heap: %u", (unsigned)esp_get_free_heap_size());
     return ESP_OK;
 }
 
