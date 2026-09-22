@@ -1,6 +1,6 @@
 /**
  * @file app_logic_led.c
- * @brief Điều phối màu sắc và độ sáng LED bằng queue và task Application Layer.
+ * @brief Điều phối màu sắc và độ sáng LED bằng queue và task TĨNH (Static Task) để tối ưu Heap.
  */
 
 #include "app_logic_led.h"
@@ -13,7 +13,8 @@
 static const char *TAG = "APP_LOGIC_LED";
 
 #define DF_APP_LOGIC_LED_QUEUE_LENGTH  (8U)
-#define DF_APP_LOGIC_LED_TASK_STACK    (3072U)
+/* Tối ưu Stack: Giảm từ 3072 xuống 1536 Bytes (đủ cho driver WS2812/RMT LED) */
+#define DF_APP_LOGIC_LED_TASK_STACK    (1536U)
 #define DF_APP_LOGIC_LED_TASK_PRIORITY (5U)
 
 typedef enum {
@@ -34,6 +35,10 @@ static QueueHandle_t g_hLedCommandQueue = NULL;
 static TaskHandle_t g_hLedTask = NULL;
 static bool g_bIsReady = false;
 
+/* ==================== CẤP PHÁT BỘ NHỚ TĨNH CHO TASK ==================== */
+static StackType_t s_au8LedTaskStack[DF_APP_LOGIC_LED_TASK_STACK];
+static StaticTask_t s_sLedTaskTCB;
+
 /**
  * @brief Task nhận và thực thi tuần tự các lệnh LED.
  * @param pArg Tham số task, hiện không sử dụng.
@@ -52,7 +57,7 @@ static void app_logic_led_Task(void *pArg)
                 eErr = app_led_SetBrightness(sItem.u8Brightness);
             } else if (sItem.eType == E_APP_LOGIC_LED_CMD_SHOW) {
                 eErr = app_led_Show();
-            } else if(sItem.eType == E_APP_LOGIC_LED_CMD_SET_PIXEL){
+            } else if (sItem.eType == E_APP_LOGIC_LED_CMD_SET_PIXEL) {
                 eErr = app_led_SetPixelRgb((int)sItem.u8LedIndex, sItem.sColor);
             } else {
                 eErr = ESP_ERR_INVALID_ARG;
@@ -79,8 +84,7 @@ static esp_err_t app_logic_led_SendItem(const app_logic_led_queue_item_t *pItem)
 }
 
 /**
- * @brief Khởi tạo driver LED, queue và task điều khiển.
- * @param None.
+ * @brief Khởi tạo driver LED, queue và task TĨNH điều khiển.
  * @return ESP_OK nếu thành công; mã lỗi nếu khởi tạo thất bại.
  */
 esp_err_t app_logic_led_Init(void)
@@ -97,19 +101,31 @@ esp_err_t app_logic_led_Init(void)
     if (g_hLedCommandQueue == NULL) {
         return ESP_ERR_NO_MEM;
     }
-    if (xTaskCreate(app_logic_led_Task, "led_logic",DF_APP_LOGIC_LED_TASK_STACK, NULL,DF_APP_LOGIC_LED_TASK_PRIORITY, &g_hLedTask) != pdPASS) {
+
+    /* Tạo Task Tĩnh (Static Task) - Không tốn 1 byte Heap động nào */
+    g_hLedTask = xTaskCreateStatic(
+        app_logic_led_Task,
+        "led_logic",
+        DF_APP_LOGIC_LED_TASK_STACK,
+        NULL,
+        DF_APP_LOGIC_LED_TASK_PRIORITY,
+        s_au8LedTaskStack,
+        &s_sLedTaskTCB
+    );
+
+    if (g_hLedTask == NULL) {
         vQueueDelete(g_hLedCommandQueue);
         g_hLedCommandQueue = NULL;
         return ESP_ERR_NO_MEM;
     }
+
     g_bIsReady = true;
+    ESP_LOGI(TAG, "Khởi tạo app_logic_led (Static Task) thành công");
     return ESP_OK;
 }
 
 /**
  * @brief Gửi lệnh đặt màu cho toàn bộ dải LED.
- * @param sColor Màu RGB cần hiển thị.
- * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
  */
 esp_err_t app_logic_led_SetColor(app_led_color_t sColor)
 {
@@ -122,8 +138,6 @@ esp_err_t app_logic_led_SetColor(app_led_color_t sColor)
 
 /**
  * @brief Gửi lệnh đặt độ sáng LED.
- * @param u8Brightness Độ sáng từ 0 đến 255.
- * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
  */
 esp_err_t app_logic_led_SetBrightness(uint8_t u8Brightness)
 {
@@ -136,8 +150,6 @@ esp_err_t app_logic_led_SetBrightness(uint8_t u8Brightness)
 
 /**
  * @brief Gửi lệnh xuất màu hiện tại ra dải LED.
- * @param None.
- * @return ESP_OK nếu gửi thành công; mã lỗi nếu queue chưa sẵn sàng hoặc đầy.
  */
 esp_err_t app_logic_led_Show(void)
 {
@@ -145,8 +157,11 @@ esp_err_t app_logic_led_Show(void)
     return app_logic_led_SendItem(&sItem);
 }
 
-
-esp_err_t app_logic_led_SetPixelColor(uint8_t u8LedIndex, app_led_color_t sColor){
+/**
+ * @brief Gửi lệnh đặt màu cho 1 pixel LED cụ thể.
+ */
+esp_err_t app_logic_led_SetPixelColor(uint8_t u8LedIndex, app_led_color_t sColor)
+{
     app_logic_led_queue_item_t sItem = {
         .eType = E_APP_LOGIC_LED_CMD_SET_PIXEL,
         .sColor = sColor,
