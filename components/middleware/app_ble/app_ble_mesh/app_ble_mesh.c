@@ -31,7 +31,7 @@ static void get_device_name(char *out, size_t out_size)
 {
     uint8_t mac[6] = {0};
     esp_read_mac(mac, ESP_MAC_BASE);
-    (void)snprintf(out, out_size, "VCONNEX-%02X%02X", mac[4], mac[5]);
+    (void)snprintf(out, out_size, "VCONNEX_MESH_%02X%02X", mac[4], mac[5]);
 }
 
 /* ======================== GATT ACCESS CALLBACK ======================== */
