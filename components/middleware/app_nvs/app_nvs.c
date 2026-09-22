@@ -685,3 +685,31 @@ esp_err_t app_nvs_InitSensorConfigDefault(void)
     
     return err;
 }
+
+
+
+uint8_t app_nvs_LoadReconfigFlag(void) {
+  nvs_handle_t hHandle = 0U;
+  uint8_t u8Value = E_APP_RECONFIG_NONE;
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hHandle);
+  if (eErr == ESP_OK) {
+    (void)nvs_get_u8(hHandle, DF_APP_STORAGE_KEY_RECONFIG_FLAG, &u8Value);
+    // Nếu chưa từng ghi (ESP_ERR_NVS_NOT_FOUND) -> u8Value giữ nguyên NONE, không coi là lỗi
+    (void)nvs_close(hHandle);
+  }
+  return u8Value;
+}
+
+esp_err_t app_nvs_SaveReconfigFlag(uint8_t u8Flag) {
+  nvs_handle_t hHandle = 0U;
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
+  if (eErr == ESP_OK) {
+    eErr = nvs_set_u8(hHandle, DF_APP_STORAGE_KEY_RECONFIG_FLAG, u8Flag);
+    if (eErr == ESP_OK) {
+      eErr = nvs_commit(hHandle);   /* BẮT BUỘC commit ngay, trước esp_restart() */
+      ESP_LOGI(TAG, "Đã ghi cờ reconfig = %u", (unsigned)u8Flag);
+    }
+    (void)nvs_close(hHandle);
+  }
+  return eErr;
+}

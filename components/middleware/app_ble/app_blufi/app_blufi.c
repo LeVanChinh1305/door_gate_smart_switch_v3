@@ -41,6 +41,7 @@ static const char *TAG = "APP_BLUFI";
 
 static void blufi_delayed_deinit_task(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(1000)); /* Chờ 1 giây cho BLE truyền xong response rồi restart */
+    (void)app_nvs_SaveReconfigFlag(E_APP_RECONFIG_NONE);
     ESP_LOGI(TAG, "BluFi: Đã lưu cấu hình vào NVS -> Khởi động lại thiết bị...");
     esp_restart();
 }

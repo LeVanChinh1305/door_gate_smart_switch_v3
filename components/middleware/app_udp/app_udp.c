@@ -591,6 +591,7 @@ static void app_udp_Task(void *pvArg)
 
         if (bExitRequested) {
             ESP_LOGI(TAG, "Nhận yêu cầu kết thúc cấu hình -> Đã lưu NVS, đang khởi động lại thiết bị...");
+            (void)app_nvs_SaveReconfigFlag(E_APP_RECONFIG_NONE);  
             vTaskDelay(pdMS_TO_TICKS(500)); /* Chờ 500ms để response UDP được gửi xong */
             esp_restart();
         }

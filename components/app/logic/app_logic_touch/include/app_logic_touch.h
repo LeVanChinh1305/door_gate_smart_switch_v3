@@ -33,6 +33,15 @@ esp_err_t app_logic_touch_Init(void);
  */
 esp_err_t app_logic_touch_SendCommand(e_app_logic_touch_cmd_t eCommand);
 
+
+/**
+ * @brief Khởi tạo task cảm ứng RÚT GỌN, chỉ dùng trong chế độ cấu hình
+ *        (BluFi/UDP). Bất kỳ nút nào được giữ đủ lâu sẽ hủy cấu hình
+ *        và khởi động lại thiết bị.
+ * @return ESP_OK nếu khởi tạo thành công.
+ */
+esp_err_t app_logic_touch_InitCancelConfigMode(void);
+
 #ifdef __cplusplus
 }
 #endif

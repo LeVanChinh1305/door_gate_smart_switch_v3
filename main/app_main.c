@@ -29,10 +29,6 @@ static const char *TAG = "APP_MAIN";
 static app_nvs_device_config_t sNvsConfig;
 static app_nvs_device_config_t sDeviceConfig;
 
-static bool s_bIsBlufiInited = false;
-static bool s_bIsUdpInited = false; 
-static bool s_bIsMeshInited = false; 
-
 /**
  * @brief Đọc cấu hình từ NVS và khởi tạo dịch vụ MQTT Client.
  * @note Hàm nội bộ tĩnh (static) của file app_main.c.
@@ -68,33 +64,53 @@ static esp_err_t app_main_StartMqttFromNvs(void)
 }
 
 /**
- * @brief   Task ngắn hạn: tắt BluFi (app_blufi_Deinit() có thể mất >1s và tự
- *          gọi app_mqtt_StartInit() -> app_sntp_WaitForSync() chờ tới 8s).
- * @note    KHÔNG chạy trên main task vì main task đã đăng ký Task Watchdog
- *          5s (esp_task_wdt_add(NULL)); chạy trực tiếp ở đó sẽ khiến main
- *          task không kịp gọi esp_task_wdt_reset() và bị TWDT reset thiết bị.
+ * @brief   Nhánh khởi động dành riêng cho chế độ CẤU HÌNH (BluFi hoặc UDP).
+ * @note    Được gọi ngay sau khi đọc cờ u8ReconfigFlag != NONE từ NVS.
+ *          Chỉ init tối thiểu các module cần thiết (LED, buzzer, task cảm
+ *          ứng RÚT GỌN chỉ để hủy) — KHÔNG init Wi-Fi STA/MQTT/relay logic
+ *          đầy đủ như chế độ NORMAL, và KHÔNG bao giờ return về app_main().
+ *          app_blufi.c / app_udp.c tự gọi esp_restart() khi hoàn tất hoặc
+ *          khi người dùng thoát/hủy từ App Mobile.
+ * @param   u8Flag Giá trị cờ đã đọc (E_APP_RECONFIG_BLUFI hoặc E_APP_RECONFIG_UDP).
  */
-static void app_main_ExitBlufiTask(void *pvParameters)
+static void app_main_RunConfigMode(uint8_t u8Flag)
 {
-    (void)pvParameters;
-    ESP_LOGI(TAG, "Thoát chế độ CONNECT_AUTO -> Tắt Bluetooth & Trả RAM về Heap...");
-    (void)app_blufi_Deinit();
-    vTaskDelete(NULL);
-}
+    ESP_LOGW(TAG, "=== BOOT VÀO CHẾ ĐỘ CẤU HÌNH (flag=%u) ===", (unsigned)u8Flag);
 
-/**
- * @brief   Task ngắn hạn: khởi động lại MQTT từ NVS sau khi thoát CONNECT_MANUAL.
- * @note    Lý do tách task giống hệt app_main_ExitBlufiTask ở trên:
- *          app_mqtt_StartInit() có thể block tới 8s trong app_sntp_WaitForSync().
- */
-static void app_main_RestartMqttTask(void *pvParameters)
-{
-    (void)pvParameters;
-    ESP_LOGI(TAG, "Kích hoạt lại MQTT Client từ NVS...");
-    (void)app_main_StartMqttFromNvs();
-    vTaskDelete(NULL);
-}
+    /* Chỉ init tối thiểu cần cho chế độ cấu hình */
+    (void)app_logic_led_Init();
+    app_led_state_Init();
+    (void)app_logic_buzzer_Init();
 
+    /* Task cảm ứng RÚT GỌN — chỉ để nút vật lý hủy cấu hình, không dùng
+       chung app_logic_touch_Task đầy đủ (task đó không được Init ở nhánh này) */
+    (void)app_logic_touch_InitCancelConfigMode();
+
+    if (u8Flag == E_APP_RECONFIG_BLUFI) {
+        app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
+        esp_err_t eWifiRet = app_wifi_InitSta();
+        if (eWifiRet != ESP_OK) {
+            ESP_LOGW(TAG, "Init Wi-Fi STA cho BluFi gặp sự cố: %s", esp_err_to_name(eWifiRet));
+        }
+        (void)app_blufi_Init();
+    } else if (u8Flag == E_APP_RECONFIG_UDP) {
+        app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
+        (void)app_udp_Init();
+    } else {
+        ESP_LOGE(TAG, "Giá trị cờ reconfig không hợp lệ: %u", (unsigned)u8Flag);
+    }
+
+    ESP_LOGI(TAG, "=== HỆ THỐNG ĐÃ VÀO CHẾ ĐỘ CẤU HÌNH ===");
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
+    /* Vòng lặp riêng cho chế độ config — không có BLE Mesh/UDP/MQTT dance,
+       vì mọi chuyển đổi mode khác đều đi qua esp_restart() từ nơi khác */
+    while (true) {
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(1000U));
+    }
+    /* Không bao giờ chạy tới đây */
+}
 
 void app_main(void) {
   /* Kiểm tra nguyên nhân khởi động lại (đặc biệt là do Task Watchdog) */
@@ -112,10 +128,10 @@ void app_main(void) {
         .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,  /* Giám sát Idle Task trên mọi Core */
         .trigger_panic = true                             /* Tự động Reset ESP32 khi bị treo */
     };
-    
+
     /* Nạp cấu hình TWDT */
   ESP_ERROR_CHECK(esp_task_wdt_reconfigure(&sTwdtConfig));
-    
+
   ESP_LOGI("MAIN", "Đã khởi tạo Task Watchdog Timer (TWDT) 5s thành công.");
 
   ESP_LOGI(TAG, "=== BẮT ĐẦU KIỂM TRA KHỞI TẠO NVS ===");
@@ -127,14 +143,28 @@ void app_main(void) {
     return;
   }
   ESP_LOGI(TAG, "Khởi tạo NVS thành công!");
+
+  /* ==================================================================
+   * ĐỌC CỜ RECONFIG NGAY SAU NVS INIT, TRƯỚC MỌI THỨ KHÁC.
+   * Nếu != NONE -> reset cờ về NONE NGAY LẬP TỨC (chống boot-loop nếu
+   * mất điện giữa chừng lúc đang cấu hình) rồi rẽ hẳn sang nhánh riêng,
+   * không bao giờ quay lại luồng NORMAL bên dưới trong cùng phiên boot.
+   * ================================================================== */
+  uint8_t u8ReconfigFlag = app_nvs_LoadReconfigFlag();
+  if (u8ReconfigFlag != E_APP_RECONFIG_NONE) {
+      (void)app_nvs_SaveReconfigFlag(E_APP_RECONFIG_NONE);
+      app_main_RunConfigMode(u8ReconfigFlag);
+      return; 
+  }
+
+  /* ================= TỪ ĐÂY TRỞ XUỐNG: LUỒNG NORMAL/IDLE ================= */
+
   if (app_nvs_LoadExtraConfig(&g_sExtraConfig) == ESP_OK) {
-    if ((g_sExtraConfig.gate_1_control_mode == 3) || (g_sExtraConfig.gate_2_control_mode == 3) || (g_sExtraConfig.gate_3_control_mode == 3)) 
+    if ((g_sExtraConfig.gate_1_control_mode == 3) || (g_sExtraConfig.gate_2_control_mode == 3) || (g_sExtraConfig.gate_3_control_mode == 3))
     {
       app_device_state_SetModeBit(DEVICE_MODE_LOCKED_CHILD, true);
       ESP_LOGI("APP_MAIN", "Đã khôi phục trạng thái KHÓA TRẺ EM từ NVS!");
     }
-  }
-  if (eRet == ESP_OK) {
     ESP_LOGI(TAG, "Nạp Extra Config từ NVS vào RAM thành công");
     /* Kiểm tra và bật cờ DEVICE_MODE_LOCKED_RF nếu đang trong khung giờ khóa */
     (void)app_logic_extra_config_IsRFLocked();
@@ -148,24 +178,26 @@ void app_main(void) {
     ESP_LOGE(TAG, "Khởi tạo logic relay thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
     return;
   }
-  ESP_LOGI(TAG, "khởi tạo logic relay thành công"); 
+  ESP_LOGI(TAG, "khởi tạo logic relay thành công");
   app_relay_state_Init();
   app_relay_state_SetState(E_RELAY_STATE_CLOSED);
-  ESP_LOGI(TAG, "Đã set trạng thái cửa khi khởi động là đóng hoàn toàn"); 
+  ESP_LOGI(TAG, "Đã set trạng thái cửa khi khởi động là đóng hoàn toàn");
 
+  /* Task cảm ứng ĐẦY ĐỦ — chỉ chạy trong nhánh NORMAL/IDLE này.
+     Giữ 3s/7s giờ chỉ ghi cờ NVS + esp_restart(), không set bitmask sống nữa. */
   eRet = app_logic_touch_Init();
   if (eRet != ESP_OK) {
     ESP_LOGE(TAG, "Khởi tạo logic cảm ứng thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
     return;
   }
-  ESP_LOGI(TAG, "Khởi tạo logic cảm ứng nút bấm thành công"); 
+  ESP_LOGI(TAG, "Khởi tạo logic cảm ứng nút bấm thành công");
 
   eRet = app_logic_led_Init();
   if (eRet != ESP_OK) {
     ESP_LOGE(TAG, "Khởi tạo logic LED thất bại! Mã lỗi: %s", esp_err_to_name(eRet));
     return;
   }
-  ESP_LOGI(TAG, "Khởi tạo logic LED thành công"); 
+  ESP_LOGI(TAG, "Khởi tạo logic LED thành công");
   app_led_state_Init();
   app_led_state_SetState(E_LED_STATE_NORMAL_IDLE);
 
@@ -188,40 +220,30 @@ void app_main(void) {
     return;
   }
 
-  // 4. Khởi tạo Wi-Fi STA
-  eRet = app_wifi_InitSta();
-  if (eRet != ESP_OK) {
-    ESP_LOGW(TAG, "Khởi tạo Wi-Fi STA gặp sự cố, kiểm tra trạng thái thiết bị...");
-  }
-  ESP_LOGI(TAG, "Khởi tạo wifi STA thành công");
-
-  // 5. Điều phối luồng khởi động dựa trên trạng thái thiết bị
-  if (app_device_state_HasMode(DEVICE_MODE_UNCONNECTED)) {
-      ESP_LOGI(TAG, "Thiết bị đang ở chế độ UNCONNECTED, kiểm tra NVS cấu hình Wi-Fi...");
-      if (!app_nvs_IsProvisionedWifiConfig()) {
-          ESP_LOGI(TAG, "Chưa có Wi-Fi trong NVS, đang chờ lệnh kết nối thủ công/ tự động");
-          app_led_state_SetState(E_LED_STATE_UNCONNECTED);
-      } else {
-          ESP_LOGI(TAG, "Đã có sẵn cấu hình Wi-Fi, chuyển sang trạng thái hoạt động bình thường...");
-          
-          /* Cập nhật Bitmask: Tắt UNCONNECTED, Bật NORMAL */
-          app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
-          app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
-          
-          app_led_state_SetState(E_LED_STATE_LOCKED);
-      }
-  }
-
-  if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
-    ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối tự động (BluFi)...");
-  }
-  else if (app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
-    ESP_LOGI(TAG, "Thiết bị đang ở chế độ kết nối thủ công (UDP)...");
-  }
-  else if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
-      ESP_LOGI(TAG, "Thiết bị đang ở chế độ hoạt động bình thường, kiểm tra kết nối mạng...");
+  // 3. Điều phối luồng dựa trên NVS: đã provisioned Wi-Fi hay chưa
+  if (!app_nvs_IsProvisionedWifiConfig()) {
+      ESP_LOGI(TAG, "Chưa có Wi-Fi trong NVS -> Chế độ CHỜ (IDLE), chờ người dùng giữ nút để cấu hình");
+      app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, true);
+      app_led_state_SetState(E_LED_STATE_UNCONNECTED);
+  } else {
+      ESP_LOGI(TAG, "Đã có sẵn cấu hình Wi-Fi -> Chế độ NORMAL");
+      app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
+      app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
       app_led_state_SetState(E_LED_STATE_LOCKED);
-      
+
+      /* Init BLE Mesh SỚM, ngay khi heap còn sạch nhất, TRƯỚC Wi-Fi STA/TLS/MQTT
+         -> tránh Malloc failed do heap phân mảnh (xem log crash trước đó) */
+      ESP_LOGI(TAG, "Khởi tạo BLE Mesh sớm (heap còn sạch)...");
+      (void)app_ble_mesh_Init();
+
+      // 4. Khởi tạo Wi-Fi STA
+      eRet = app_wifi_InitSta();
+      if (eRet != ESP_OK) {
+          ESP_LOGW(TAG, "Khởi tạo Wi-Fi STA gặp sự cố, kiểm tra trạng thái thiết bị...");
+      } else {
+          ESP_LOGI(TAG, "Khởi tạo wifi STA thành công");
+      }
+
       if (app_wifi_WaitForConnect(10000U)) {
           ESP_LOGI(TAG, "Kết nối Wi-Fi thành công!");
           (void)app_main_StartMqttFromNvs();
@@ -229,83 +251,19 @@ void app_main(void) {
           ESP_LOGW(TAG, "Timeout chờ kết nối Wi-Fi, tiếp tục chạy các task nền.");
       }
   }
-  else {
-      ESP_LOGW(TAG, "Trạng thái không xác định, đặtt về UNCONNECTED");
-      
-      /* Reset Bitmask về duy nhất UNCONNECTED */
-      app_device_state_SetModeBit(DEVICE_MODE_NORMAL, false);
-      app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
-      app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
-      app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, true);
-      
-      app_led_state_SetState(E_LED_STATE_NORMAL_IDLE);
-  }
 
   ESP_LOGI(TAG, "=== HỆ THỐNG ĐÃ KHỞI ĐỘNG HOÀN TẤT ===");
 
   /* Đăng ký task chính app_main vào TWDT sau khi hoàn tất khởi động mạng và các module */
   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
-  // Vòng lặp chính của app_main (giữ task chính hoạt động)
+  /* Vòng lặp chính giờ RẤT ĐƠN GIẢN — không còn init/deinit BLE Mesh/BluFi/UDP
+     động theo bitmask nữa, vì mọi chuyển mode (CONNECT_AUTO/CONNECT_MANUAL)
+     giờ đi qua u8ReconfigFlag + esp_restart(), xử lý ở app_logic_touch.c và
+     app_main_RunConfigMode() phía trên — không còn xảy ra tại runtime trong
+     nhánh NORMAL này nữa. */
   while (true) {
     esp_task_wdt_reset();
-
-    /* 1. Kích hoạt BluFi khi ở mode CONNECT_AUTO và chưa Init */
-    if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO)) {
-      if (!s_bIsBlufiInited) {
-        ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_AUTO -> Tắt MQTT, udp Khởi tạo BluFi...");
-        (void)app_mqtt_Stop();
-        if (s_bIsUdpInited) {
-          (void)app_udp_Deinit();
-          s_bIsUdpInited = false;
-        }
-        
-        s_bIsBlufiInited = true;
-        (void)app_blufi_Init();
-      }
-    }
-    /* TỰ ĐỘNG DỌN DẸP & THU HỒI ~50KB RAM KHI THOÁT CHẾ ĐỘ BLUFI */
-    else if (s_bIsBlufiInited) {
-      s_bIsBlufiInited = false; /* Reset cờ để sẵn sàng cho lần bấm giữ 3s tiếp theo */
-      /* Chạy trên task riêng: app_blufi_Deinit() có thể mất >1s và tự kích
-       * hoạt app_mqtt_StartInit() (chờ SNTP tới 8s) -> nếu chạy thẳng ở đây,
-       * main task (đã đăng ký TWDT 5s) không kịp esp_task_wdt_reset() và bị
-       * watchdog reset thiết bị. */
-      xTaskCreate(app_main_ExitBlufiTask, "exit_blufi_task", 4096, NULL, 5, NULL);
-    }
-    
-    /* 2. Kích hoạt UDP khi ở mode CONNECT_MANUAL và chưa Init */
-    if (app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
-      if (!s_bIsUdpInited) {
-        ESP_LOGI(TAG, "Phát hiện yêu cầu CONNECT_MANUAL -> Khởi tạo UDP Socket...");
-        s_bIsUdpInited = true;
-        (void)app_udp_Init();
-      }
-    }
-    else if (s_bIsUdpInited) {
-      ESP_LOGI(TAG, "Thoát chế độ CONNECT_MANUAL -> Dừng UDP Socket...");
-      (void)app_udp_Deinit();
-      s_bIsUdpInited = false;
-      if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
-          /* Chạy trên task riêng vì app_main_StartMqttFromNvs() có thể block
-           * tới 8s trong app_sntp_WaitForSync() -> tương tự app_main_ExitBlufiTask. */
-          xTaskCreate(app_main_RestartMqttTask, "restart_mqtt_task", 4096, NULL, 5, NULL);
-      }
-    }
-    /* 3. BLE Mesh khi ở chế độ NORMAL */
-    if (app_device_state_HasMode(DEVICE_MODE_NORMAL)) {
-        if (!s_bIsMeshInited) {
-            ESP_LOGI(TAG, "Chế độ NORMAL → Khởi tạo BLE Mesh...");
-            s_bIsMeshInited = true;
-            (void)app_ble_mesh_Init();
-        }
-    }
-    else if (s_bIsMeshInited) {
-        ESP_LOGI(TAG, "Thoát NORMAL → Tắt BLE Mesh...");
-        s_bIsMeshInited = false;
-        (void)app_ble_mesh_Deinit();
-    }
-
     vTaskDelay(pdMS_TO_TICKS(1000U));
   }
 }

@@ -10,6 +10,8 @@ extern "C" {
 
 #define DF_APP_STORAGE_KEY_EXTRA_CONFIG "extra_cfg"
 #define DF_APP_STORAGE_KEY_SENSOR_CFG   "sensor_cfg"
+#define DF_APP_STORAGE_KEY_RECONFIG_FLAG "reconfig_flag"
+
 
 #define DF_APP_STORAGE_NVS_NAMESPACE       "app_storage" // vị trí lưu trữ trong NVS
 #define DF_APP_STORAGE_KEY_PROVISIONED     "provisioned" // đánh dấu đã lưu cấu hình Wi-Fi
@@ -202,6 +204,20 @@ typedef struct {
 esp_err_t app_nvs_SaveSensorConfig(const app_nvs_sensor_config_t *psConfig);
 esp_err_t app_nvs_GetSensorConfig(app_nvs_sensor_config_t *psConfig);
 esp_err_t app_nvs_InitSensorConfigDefault(void);
+
+
+typedef enum {
+    E_APP_RECONFIG_NONE   = 0,  // Chạy bình thường (NORMAL hoặc IDLE)
+    E_APP_RECONFIG_BLUFI  = 1,  // Boot vào chế độ cấu hình BluFi
+    E_APP_RECONFIG_UDP    = 2,  // Boot vào chế độ cấu hình UDP
+} e_app_reconfig_flag_t;
+
+// Đọc cờ reconfig từ NVS (mặc định trả về E_APP_RECONFIG_NONE nếu chưa từng ghi)
+uint8_t app_nvs_LoadReconfigFlag(void);
+
+// Ghi cờ reconfig vào NVS (bắt buộc commit ngay)
+esp_err_t app_nvs_SaveReconfigFlag(uint8_t u8Flag);
+
 
 #ifdef __cplusplus
 }

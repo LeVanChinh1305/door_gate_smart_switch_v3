@@ -33,6 +33,17 @@ static bool g_bIsReady = false;
 #define DF_TOUCH_POLL_PERIOD_MS (50U)   // Thời gian quét 50ms một lần
 #define DF_TOUCH_HOLD_3S_MS     (3000U) // Ngưỡng giữ 3 giây (BluFi)
 #define DF_TOUCH_HOLD_7S_MS     (7000U) // Ngưỡng giữ 7 giây (Manual)
+#define DF_CANCEL_HOLD_MS       (800U)  /* Giữ tối thiểu 800ms mới coi là chủ ý hủy, chống nhiễu/bounce */
+#define DF_CANCEL_POLL_PERIOD_MS (50U) 
+
+static void app_logic_touch_DelayedReconfigRestartTask(void *pvParameters) {
+    uint8_t u8Flag = (uint8_t)(uintptr_t)pvParameters;
+    vTaskDelay(pdMS_TO_TICKS(300)); /* Cho LED/buzzer kịp phản hồi trước khi mất nguồn Bluetooth/Wifi cũ */
+    (void)app_nvs_SaveReconfigFlag(u8Flag);
+    ESP_LOGI(TAG, "Ghi cờ reconfig=%u -> Khởi động lại...", (unsigned)u8Flag);
+    esp_restart();
+}
+
 /**
  * @brief Task nhận và xử lý các lệnh cảm ứng.
  * @param pArg Tham số task, hiện không sử dụng.
@@ -91,12 +102,11 @@ static void app_logic_touch_Task(void *pArg)
                     bIsPressed = false;
 
                     if (u32HeldMs >= DF_TOUCH_HOLD_7S_MS) {
-                        ESP_LOGI(TAG, ">>> Giữ > 7s -> Xử lý kết nối thủ công");
-                        /* TODO: Gọi hàm Config Manual */
-                        app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
-                        app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, true);
+                        ESP_LOGI(TAG, ">>> Giữ > 7s -> Xử lý kết nối thủ công (UDP), reboot...");
                         app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
-                    } 
+                        xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_udp",
+                                    2048, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
+                    }
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
                         // th1: giữ đồng thời 2 nút đóng + mở 
                         if ((u8PressedBtn & (DF_TOUCH_BTN_CS5 | DF_TOUCH_BTN_CS7)) == (DF_TOUCH_BTN_CS5 | DF_TOUCH_BTN_CS7)) {
@@ -108,36 +118,15 @@ static void app_logic_touch_Task(void *pArg)
                         }
 
                         // th2: giữ 1 nút đơn 3 giây
-                        else{
-                            ESP_LOGI(TAG, ">>> Giữ 3-7s -> Xử lý kết nối tự động bằng blufi");
-                            app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, false);
-                            app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, true);
+                        else {
+                            ESP_LOGI(TAG, ">>> Giữ 3-7s -> Xử lý kết nối tự động BluFi, reboot...");
                             app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
+                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_blufi",
+                                        2048, (void *)(uintptr_t)E_APP_RECONFIG_BLUFI, 5, NULL);
                         }
                     } 
                     else {
-                        if (app_device_state_HasMode(DEVICE_MODE_CONNECT_AUTO) || 
-                            app_device_state_HasMode(DEVICE_MODE_CONNECT_MANUAL)) {
-                            
-                            ESP_LOGW(TAG, "Đang trong chế độ kết nối, nhận nút bấm (0x%02X) -> HỦY KẾT NỐI", u8PressedBtn);
-                            
-                            /* Tắt các bitmask chế độ kết nối */
-                            app_device_state_SetModeBit(DEVICE_MODE_CONNECT_AUTO, false);
-                            app_device_state_SetModeBit(DEVICE_MODE_CONNECT_MANUAL, false);
-
-                            /* Khôi phục trạng thái trước đó dựa vào việc NVS đã có Wi-Fi hay chưa */
-                            if (app_nvs_IsProvisionedWifiConfig()) {
-                                app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
-                                /* Đổi LED về trạng thái bình thường */
-                                app_led_state_SetState(E_LED_STATE_NORMAL);
-                            } else {
-                                app_device_state_SetModeBit(DEVICE_MODE_UNCONNECTED, true);
-                                app_led_state_SetState(E_LED_STATE_UNCONNECTED);
-                            }
-
-                            u8PrevStatus = u8CurrentStatus;
-                            continue; /* Kết thúc ngay, không chạy Relay cửa */
-                        }
+                        
                         /* Nếu đang ở chế độ UNCONNECTED hoặc NORMAL_IDLE (chờ cấu hình / chưa sẵn sàng) thì bỏ qua nút bấm đơn ngắn */
                         e_led_device_state_t eLedState = app_led_state_GetState();
                         if (eLedState == E_LED_STATE_UNCONNECTED || eLedState == E_LED_STATE_NORMAL_IDLE) {
@@ -247,4 +236,67 @@ esp_err_t app_logic_touch_SendCommand(e_app_logic_touch_cmd_t eCommand)
         return ESP_ERR_INVALID_ARG;
     }
     return xQueueSend(g_hTouchCommandQueue, &eCommand, 0U) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT;
+}
+
+
+static void app_logic_touch_CancelConfigTask(void *pArg)
+{
+    (void)pArg;
+    uint8_t u8PrevStatus = 0U;
+    uint8_t u8CurrentStatus = 0U;
+    bool bIsPressed = false;
+    TickType_t xPressStartTick = 0;
+
+    ESP_LOGI(TAG, "Bắt đầu task cảm ứng RÚT GỌN (chế độ config) - chờ nút hủy...");
+    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+
+    while (true) {
+        esp_task_wdt_reset();
+        vTaskDelay(pdMS_TO_TICKS(DF_CANCEL_POLL_PERIOD_MS));
+
+        u8CurrentStatus = 0U;
+        if (app_touch_ReadButtonStatus(&u8CurrentStatus) != ESP_OK) {
+            continue;
+        }
+
+        /* Cạnh lên: bắt đầu bấm */
+        if ((u8CurrentStatus != 0U) && (u8PrevStatus == 0U) && !bIsPressed) {
+            bIsPressed = true;
+            xPressStartTick = xTaskGetTickCount();
+        }
+
+        /* Đang giữ, kiểm tra đã đủ thời gian chưa (không cần chờ nhả nút) */
+        if (bIsPressed && (u8CurrentStatus != 0U)) {
+            uint32_t u32HeldMs = (uint32_t)((xTaskGetTickCount() - xPressStartTick) * portTICK_PERIOD_MS);
+            if (u32HeldMs >= DF_CANCEL_HOLD_MS) {
+                ESP_LOGW(TAG, ">>> Nút vật lý giữ đủ lâu -> HỦY cấu hình, khởi động lại...");
+                (void)app_nvs_SaveReconfigFlag(E_APP_RECONFIG_NONE);
+                vTaskDelay(pdMS_TO_TICKS(100)); /* cho log kịp flush */
+                esp_restart();
+            }
+        }
+
+        /* Cạnh xuống: nhả nút trước khi đủ thời gian -> hủy trạng thái đang bấm */
+        if (bIsPressed && (u8CurrentStatus == 0U)) {
+            bIsPressed = false;
+        }
+
+        u8PrevStatus = u8CurrentStatus;
+    }
+}
+
+
+esp_err_t app_logic_touch_InitCancelConfigMode(void)
+{
+    esp_err_t eErr = app_touch_Init();   /* Vẫn cần init driver CY8CMBR3108 để đọc được nút */
+    if (eErr != ESP_OK) {
+        return eErr;
+    }
+
+    if (xTaskCreate(app_logic_touch_CancelConfigTask, "touch_cancel_cfg",
+                     DF_TASK_STACK_NETWORK, NULL, DF_TASK_PRIO_NORMAL, NULL) != pdPASS) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
 }
