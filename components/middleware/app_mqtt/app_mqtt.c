@@ -165,7 +165,8 @@ esp_err_t app_mqtt_StartInit(app_nvs_device_config_t *pDeviceConfig){
         .credentials.authentication.password = g_sDeviceConfig.password,
         .task.stack_size = DF_TASK_STACK_MAX, 
         .task.priority = DF_TASK_PRIO_NORMAL,   
-        .buffer.size = 4096,
+        .buffer.size = 2048,
+        .buffer.out_size = 1024,
         .outbox.limit = 1024 * 4, // giới hạn bộ đệm Outbox tối đa 4KB 
         .network.timeout_ms = 20000,
     };

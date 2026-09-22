@@ -12,6 +12,7 @@
 #include "app_logic_mqtt_publisher.h"
 #include <string.h>
 #include "app_common.h"
+#include "app_ble_mesh.h"
 
 static const char *TAG = "APP_OTA";
 
@@ -211,10 +212,17 @@ esp_err_t app_ota_ProcessCmdStartOta(const cJSON *jsValue)
 
     snprintf(s_sOtaParam.acUrl, sizeof(s_sOtaParam.acUrl), "%s", jsUrl->valuestring);
 
-    BaseType_t xRet = xTaskCreate(prv_OtaTask, "ota_task", DF_TASK_STACK_MAX, (void *)&s_sOtaParam, DF_TASK_PRIO_MAX, NULL);
+    BaseType_t xRet = xTaskCreate(prv_OtaTask, "ota_task", DF_TASK_STACK_MEDIUM, (void *)&s_sOtaParam, DF_TASK_PRIO_MAX, NULL);
     if (xRet != pdPASS) {
         ESP_LOGE(TAG, "Tạo ota_task thất bại");
         return ESP_ERR_NO_MEM;
+    }
+
+    ESP_LOGI(TAG, "OTA task đã tạo → dừng BLE để giải phóng RAM");
+
+    esp_err_t eBleRet = app_ble_mesh_Deinit();
+    if (eBleRet != ESP_OK) {
+        ESP_LOGW(TAG, "Dừng BLE thất bại: %s",esp_err_to_name(eBleRet));
     }
 
     return ESP_OK;

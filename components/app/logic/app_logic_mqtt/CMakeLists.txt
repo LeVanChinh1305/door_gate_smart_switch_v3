@@ -15,4 +15,5 @@ idf_component_register(
         esp_timer
         app_logic_telemetry
         app_ota
+        
 )

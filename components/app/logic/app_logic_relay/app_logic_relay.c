@@ -601,7 +601,7 @@ esp_err_t app_logic_relay_Init(void)
     /* 7. Tạo task tracking hành trình */
     xTaskResult = xTaskCreate(app_logic_relay_TrackingTask,
                               "relay_tracking",
-                              DF_TASK_STACK_NETWORK, 
+                              DF_TASK_STACK_LARGE, 
                               NULL,
                               DF_TASK_PRIO_NORMAL,
                               NULL);
