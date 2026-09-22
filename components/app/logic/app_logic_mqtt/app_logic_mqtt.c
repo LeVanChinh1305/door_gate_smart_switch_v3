@@ -597,6 +597,7 @@ static void app_logic_mqtt_Task(void *pArg)
                 } else {
                     ESP_LOGE(TAG, "cJSON_Parse thất bại với chuỗi payload: %s", sItem.acData);
                 }
+                vTaskDelay(pdMS_TO_TICKS(50));
             }
         }
     }
