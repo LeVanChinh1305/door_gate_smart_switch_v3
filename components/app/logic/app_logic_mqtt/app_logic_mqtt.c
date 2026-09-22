@@ -75,7 +75,7 @@ static void app_logic_mqtt_HandleSetData(const cJSON *jsRoot)
     }
 
     /* 1. CHUẨN HÓA: Cấp phát mảng Ciphertext trên Stack (Loại bỏ malloc/free hoàn toàn) */
-    uint8_t au8Ciphertext[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
+    static uint8_t au8Ciphertext[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
     (void)memset(au8Ciphertext, 0, sizeof(au8Ciphertext));
 
     for (int i = 0; i < iCipherLen; i++) {
@@ -91,7 +91,7 @@ static void app_logic_mqtt_HandleSetData(const cJSON *jsRoot)
     }
 
     /* 3. Sử dụng bộ đệm tĩnh đầu ra theo chuẩn hàm giải mã */
-    char acPlaintextBuffer[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
+    static char acPlaintextBuffer[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE];
     size_t zPlaintextLen = 0U;
     (void)memset(acPlaintextBuffer, 0, sizeof(acPlaintextBuffer));
 
