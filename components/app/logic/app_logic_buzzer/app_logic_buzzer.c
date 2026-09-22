@@ -10,12 +10,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "app_common.h"
 
 static const char *TAG = "APP_LOGIC_BUZZER";
 
 #define DF_APP_LOGIC_BUZZER_QUEUE_LENGTH  (8U)
 /* Tối ưu Stack: Giảm từ 3072 xuống 1536 Bytes (đủ an toàn cho driver GPIO + Delay) */
-#define DF_APP_LOGIC_BUZZER_TASK_STACK    (1536U) 
 #define DF_APP_LOGIC_BUZZER_TASK_PRIORITY (5U)
 
 typedef enum {
@@ -37,7 +37,7 @@ static TaskHandle_t g_hBuzzerTask = NULL;
 static bool g_bIsReady = false;
 
 /* ==================== CẤP PHÁT BỘ NHỚ TĨNH CHO TASK ==================== */
-static StackType_t s_au8BuzzerTaskStack[DF_APP_LOGIC_BUZZER_TASK_STACK];
+static StackType_t s_au8BuzzerTaskStack[DF_TASK_STACK_MIN];
 static StaticTask_t s_sBuzzerTaskTCB;
 
 /**
@@ -113,7 +113,7 @@ esp_err_t app_logic_buzzer_Init(void)
     g_hBuzzerTask = xTaskCreateStatic(
         app_logic_buzzer_Task,
         "buzzer_logic",
-        DF_APP_LOGIC_BUZZER_TASK_STACK,
+        DF_TASK_STACK_MIN,
         NULL,
         DF_APP_LOGIC_BUZZER_TASK_PRIORITY,
         s_au8BuzzerTaskStack,

@@ -46,7 +46,8 @@ extern "C" {
 #define DF_TASK_PRIO_NORMAL     (3)   // udp_task, VÀ mqtt_cfg.task.priority (set tường minh để tránh trùng prio=5 với relay_task)
 #define DF_TASK_PRIO_LOW        (1)   // led_task, buzzer_task
 // Task Stack Size
-#define DF_TASK_STACK_MIN       (2048) // Dành cho task cơ bản, ít biến cục bộ (điều khiển Relay, hiệu ứng LED)
+#define DF_TASK_STACK_MIN       (1024)// siêu nhỏ 
+#define DF_TASK_STACK_SMALL     (2048) // Dành cho task cơ bản, ít biến cục bộ (điều khiển Relay, hiệu ứng LED)
 #define DF_TASK_STACK_MEDIUM    (3072) // Dành cho task logic vừa phải, xử lý mảng dữ liệu nội bộ hoặc chuỗi ngắn
 #define DF_TASK_STACK_NETWORK   (4096) // Dành cho task giao tiếp mạng cơ bản (BluFi, MQTT, UDP) không mã hóa SSL
 #define DF_TASK_STACK_LARGE     (6144) // Dành cho task xử lý cấu trúc dữ liệu phức tạp (phân tích chuỗi JSON lớn, cJSON)
