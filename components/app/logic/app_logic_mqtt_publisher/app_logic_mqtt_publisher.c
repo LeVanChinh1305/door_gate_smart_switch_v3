@@ -3,7 +3,6 @@
 #include "esp_log.h"
 #include "mqtt_client.h"
 #include "mqtt_vconnex_decrypt.h"
-#include "cJSON.h"
 #include <sys/time.h>
 #include "esp_wifi.h"
 #include "app_wifi.h"
@@ -85,34 +84,45 @@ esp_err_t app_logic_mqtt_publisher_ReportGateData(uint8_t u8Gate1, uint8_t u8Gat
         return eErr;
     }
 
-    /* 3. Tạo JSON vỏ ngoài (CmdGetData) */
-    cJSON *jsRoot = cJSON_CreateObject();
-    cJSON_AddStringToObject(jsRoot, "name", "CmdGetData");
-    cJSON_AddNumberToObject(jsRoot, "devT", psConfig->dev_type);
-    cJSON_AddNumberToObject(jsRoot, "batteryPercent", 100);
-    cJSON_AddStringToObject(jsRoot, "devExtAddr", psConfig->dev_ext_addr);
-    
+    /* 3. Dựng phần devVEncrypt array bằng snprintf — không dùng cJSON để tránh cấp phát 100+ node heap */
+    /* Mỗi byte tốn tối đa 4 ký tự ("255,"), 512 bytes → tối đa 2048 + 2 dấu ngoặc */
+    static char s_acEncryptArrayBuf[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE * 4U + 4U];
+    size_t zPos = 0;
+    s_acEncryptArrayBuf[zPos++] = '[';
+    for (size_t i = 0; i < zCipherLen; i++) {
+        int iWritten = snprintf(&s_acEncryptArrayBuf[zPos],
+                                sizeof(s_acEncryptArrayBuf) - zPos - 2U,
+                                "%u%s", (unsigned int)au8Ciphertext[i],
+                                (i + 1U < zCipherLen) ? "," : "");
+        if (iWritten > 0) {
+            zPos += (size_t)iWritten;
+        }
+    }
+    s_acEncryptArrayBuf[zPos++] = ']';
+    s_acEncryptArrayBuf[zPos]   = '\0';
+
+    /* 4. Lấy Timestamp */
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000 + (uint64_t)(tv.tv_usec) / 1000;
-    cJSON_AddNumberToObject(jsRoot, "timeStamp", (double)u64Timestamp);
+    uint64_t u64Timestamp = (uint64_t)(tv.tv_sec) * 1000ULL + (uint64_t)(tv.tv_usec) / 1000ULL;
 
-    /* 4. Chuyển mảng mã hóa thành cJSON Array */
-    cJSON *jsEncryptArray = cJSON_CreateArray();
-    for (size_t i = 0; i < zCipherLen; i++) {
-        cJSON_AddItemToArray(jsEncryptArray, cJSON_CreateNumber(au8Ciphertext[i]));
-    }
-    cJSON_AddItemToObject(jsRoot, "devVEncrypt", jsEncryptArray);
+    /* 5. Dựng JSON cuối cùng bằng snprintf trên stack — không cần malloc/cJSON */
+    char acResponseJson[DF_MQTT_CRYPTO_MAX_BUFFER_SIZE * 4U + 256U];
+    snprintf(acResponseJson, sizeof(acResponseJson),
+             "{"
+             "\"name\":\"CmdGetData\","
+             "\"devT\":%d,"
+             "\"batteryPercent\":100,"
+             "\"devExtAddr\":\"%s\","
+             "\"timeStamp\":%llu,"
+             "\"devVEncrypt\":%s"
+             "}",
+             (int)psConfig->dev_type,
+             psConfig->dev_ext_addr,
+             (unsigned long long)u64Timestamp,
+             s_acEncryptArrayBuf);
 
-    /* 5. Xuất chuỗi và Publish */
-    char *pcResponseJson = cJSON_PrintUnformatted(jsRoot);
-    if (pcResponseJson != NULL) {
-        (void)app_logic_mqtt_publisher_SendResponse(pcResponseJson);
-        free(pcResponseJson);
-    }
-    cJSON_Delete(jsRoot);
-    
-    return ESP_OK;
+    return app_logic_mqtt_publisher_SendResponse(acResponseJson);
 }
 
 

@@ -39,10 +39,14 @@ static app_nvs_device_config_t g_sCurrentDeviceConfig = {0};
 
 static const char *TAG = "APP_BLUFI";
 
+/* Cờ bảo vệ: ngăn tạo blufi_delayed_deinit_task hai lần song song */
+static volatile bool s_bDeinitTaskPending = false;
+
 static void blufi_delayed_deinit_task(void *pvParameters) {
     vTaskDelay(pdMS_TO_TICKS(1000)); /* Chờ 1 giây cho BLE truyền xong response rồi restart */
     (void)app_nvs_SaveReconfigFlag(E_APP_RECONFIG_NONE);
     ESP_LOGI(TAG, "BluFi: Đã lưu cấu hình vào NVS -> Khởi động lại thiết bị...");
+    s_bDeinitTaskPending = false;
     esp_restart();
 }
 
@@ -442,7 +446,10 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                                 }
                             }
                             ESP_LOGI(TAG, "Đã lưu CmdSetDeviceConfig vào NVS -> Khởi động lại sau 1s...");
-                            xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
+                        if (!s_bDeinitTaskPending) {
+                                s_bDeinitTaskPending = true;
+                                xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
+                            }
                         }
                     }
 
@@ -460,7 +467,10 @@ static void blufi_event_callback(esp_blufi_cb_event_t event, esp_blufi_cb_param_
                         send_response_exit_configuration(dev_t, cDeviceAddress, 50000);
 
                         ESP_LOGI(TAG, "CmdExitConfiguration -> Khởi động lại sau 1s...");
-                        xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
+                        if (!s_bDeinitTaskPending) {
+                                s_bDeinitTaskPending = true;
+                                xTaskCreate(blufi_delayed_deinit_task, "blufi_deinit_task", 2048, NULL, 5, NULL);
+                            }
                     }
 
                     else {

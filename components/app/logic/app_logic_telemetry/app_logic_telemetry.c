@@ -90,6 +90,10 @@ esp_err_t app_logic_telemetry_ReportControlHistory(const app_logic_control_histo
     const app_nvs_device_config_t *pDevCfg = app_mqtt_GetDeviceConfig();
     esp_mqtt_client_handle_t xMqttClient = app_mqtt_GetClient();
 
+    if (pDevCfg == NULL) {
+        ESP_LOGE(TAG, "Cấu hình thiết bị chưa sẵn sàng, hủy gửi ReportControlHistory");
+        return ESP_FAIL;
+    }
     if ((xMqttClient == NULL) || !app_mqtt_IsConnected()) {
         ESP_LOGE(TAG, "MQTT chưa kết nối, hủy gửi ReportControlHistory");
         return ESP_FAIL;
@@ -153,6 +157,10 @@ esp_err_t app_logic_telemetry_ReportSensorHistory(const app_logic_sensor_history
     const app_nvs_device_config_t *pDevCfg = app_mqtt_GetDeviceConfig();
     esp_mqtt_client_handle_t xMqttClient = app_mqtt_GetClient();
 
+    if (pDevCfg == NULL) {
+        ESP_LOGE(TAG, "Cấu hình thiết bị chưa sẵn sàng, hủy gửi ReportSensorHistory");
+        return ESP_FAIL;
+    }
     if ((xMqttClient == NULL) || !app_mqtt_IsConnected()) {
         ESP_LOGE(TAG, "MQTT chưa kết nối, hủy gửi ReportSensorHistory");
         return ESP_FAIL;
@@ -208,6 +216,10 @@ esp_err_t app_logic_telemetry_ReportWarningSgm(uint8_t u8Sensor, uint8_t u8Close
     const app_nvs_device_config_t *pDevCfg = app_mqtt_GetDeviceConfig();
     esp_mqtt_client_handle_t xMqttClient = app_mqtt_GetClient();
 
+    if (pDevCfg == NULL) {
+        ESP_LOGE(TAG, "Cấu hình thiết bị chưa sẵn sàng, hủy gửi ReportWarningSgm");
+        return ESP_FAIL;
+    }
     if ((xMqttClient == NULL) || !app_mqtt_IsConnected()) {
         ESP_LOGE(TAG, "MQTT chưa kết nối, hủy gửi ReportWarningSgm");
         return ESP_FAIL;

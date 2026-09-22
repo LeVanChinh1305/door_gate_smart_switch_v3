@@ -28,6 +28,8 @@ static const char *TAG = "APP_LOGIC_TOUCH";
 static QueueHandle_t g_hTouchCommandQueue = NULL;
 static TaskHandle_t g_hTouchTask = NULL;
 static bool g_bIsReady = false;
+/* Cờ bảo vệ: ngăn tạo reconfig task nhiều lần khi người dùng giữ nút liên tục */
+static volatile bool s_bReconfigTaskPending = false;
 
 
 #define DF_TOUCH_POLL_PERIOD_MS (50U)   // Thời gian quét 50ms một lần
@@ -104,8 +106,11 @@ static void app_logic_touch_Task(void *pArg)
                     if (u32HeldMs >= DF_TOUCH_HOLD_7S_MS) {
                         ESP_LOGI(TAG, ">>> Giữ > 7s -> Xử lý kết nối thủ công (UDP), reboot...");
                         app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
-                        xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_udp",
-                                    2048, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
+                        if (!s_bReconfigTaskPending) {
+                            s_bReconfigTaskPending = true;
+                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_udp",
+                                        2048, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
+                        }
                     }
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
                         // th1: giữ đồng thời 2 nút đóng + mở 
@@ -121,8 +126,11 @@ static void app_logic_touch_Task(void *pArg)
                         else {
                             ESP_LOGI(TAG, ">>> Giữ 3-7s -> Xử lý kết nối tự động BluFi, reboot...");
                             app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
-                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_blufi",
-                                        2048, (void *)(uintptr_t)E_APP_RECONFIG_BLUFI, 5, NULL);
+                            if (!s_bReconfigTaskPending) {
+                                s_bReconfigTaskPending = true;
+                                xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_blufi",
+                                            2048, (void *)(uintptr_t)E_APP_RECONFIG_BLUFI, 5, NULL);
+                            }
                         }
                     } 
                     else {
