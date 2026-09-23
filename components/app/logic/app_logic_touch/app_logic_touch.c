@@ -109,7 +109,7 @@ static void app_logic_touch_Task(void *pArg)
                         if (!s_bReconfigTaskPending) {
                             s_bReconfigTaskPending = true;
                             xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_udp",
-                                        2048, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
+                                        DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
                         }
                     }
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
@@ -129,7 +129,7 @@ static void app_logic_touch_Task(void *pArg)
                             if (!s_bReconfigTaskPending) {
                                 s_bReconfigTaskPending = true;
                                 xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_blufi",
-                                            2048, (void *)(uintptr_t)E_APP_RECONFIG_BLUFI, 5, NULL);
+                                            DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_BLUFI, 5, NULL);
                             }
                         }
                     } 

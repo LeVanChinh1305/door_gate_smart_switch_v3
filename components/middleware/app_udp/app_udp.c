@@ -28,6 +28,7 @@
 #include "esp_wifi.h"
 #include "cJSON.h"
 #include "app_led_state.h"
+#include "app_common.h"
 
 /* ====================================================================
  * Hằng số cấu hình nội bộ (Internal Macros DF_...)
@@ -45,8 +46,6 @@
 #define DF_UDP_RCVTIMEO_SEC                 (3)
 #define DF_UDP_RCVTIMEO_USEC                (0)
 
-#define DF_UDP_TASK_STACK_SIZE              (8192U)
-#define DF_UDP_TASK_PRIORITY                (5U)
 #define DF_UDP_TASK_NAME                    "app_udp_task"
 
 #define DF_UDP_MAC_ADDR_LEN                 (6U)
@@ -723,8 +722,8 @@ static esp_err_t app_udp_StartServerTask(void)
 
     g_bUdpRunning = true;
     BaseType_t xReturned = xTaskCreate(app_udp_Task, DF_UDP_TASK_NAME,
-                                       DF_UDP_TASK_STACK_SIZE, NULL,
-                                       DF_UDP_TASK_PRIORITY, &g_hUdpTaskHandle);
+                                       DF_TASK_STACK_LARGE, NULL,
+                                       DF_TASK_PRIO_CRITICAL, &g_hUdpTaskHandle);
     if (xReturned != pdPASS) {
         g_bUdpRunning = false;
         if (g_i32UdpFd >= 0) {

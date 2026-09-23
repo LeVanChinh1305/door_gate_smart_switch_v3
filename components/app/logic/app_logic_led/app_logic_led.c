@@ -9,13 +9,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "app_common.h"
 
 static const char *TAG = "APP_LOGIC_LED";
 
 #define DF_APP_LOGIC_LED_QUEUE_LENGTH  (8U)
 /* Tối ưu Stack: Giảm từ 3072 xuống 1536 Bytes (đủ cho driver WS2812/RMT LED) */
-#define DF_APP_LOGIC_LED_TASK_STACK    (1536U)
-#define DF_APP_LOGIC_LED_TASK_PRIORITY (5U)
 
 typedef enum {
     E_APP_LOGIC_LED_CMD_SET_COLOR = 0,
@@ -36,7 +35,7 @@ static TaskHandle_t g_hLedTask = NULL;
 static bool g_bIsReady = false;
 
 /* ==================== CẤP PHÁT BỘ NHỚ TĨNH CHO TASK ==================== */
-static StackType_t s_au8LedTaskStack[DF_APP_LOGIC_LED_TASK_STACK];
+static StackType_t s_au8LedTaskStack[DF_TASK_STACK_MIN];
 static StaticTask_t s_sLedTaskTCB;
 
 /**
@@ -106,9 +105,9 @@ esp_err_t app_logic_led_Init(void)
     g_hLedTask = xTaskCreateStatic(
         app_logic_led_Task,
         "led_logic",
-        DF_APP_LOGIC_LED_TASK_STACK,
+        DF_TASK_STACK_MIN,
         NULL,
-        DF_APP_LOGIC_LED_TASK_PRIORITY,
+        DF_TASK_PRIO_CRITICAL, // 5
         s_au8LedTaskStack,
         &s_sLedTaskTCB
     );
