@@ -112,6 +112,19 @@ static void app_logic_touch_Task(void *pArg)
                                         DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
                         }
                     }
+                    if (u32HeldMs >= 5000U) {
+                        ESP_LOGI(TAG, ">>> Giữ phím 5s -> Đổi LED nháy vàng, ghi cờ BLE MESH và RESTART thiết bị...");
+                        
+                        /* 1. Đặt LED nháy vàng chỉ báo Pairing */
+                        app_led_state_SetState(E_LED_STATE_CONNECT_BLE_MESH);
+                        
+                        /* 2. Tạo task delay nhỏ rồi ghi cờ & esp_restart() */
+                        if (!s_bReconfigTaskPending) {
+                            s_bReconfigTaskPending = true;
+                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_mesh",
+                                        DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_BLE_MESH, 5, NULL);
+                        }
+                    }
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
                         // th1: giữ đồng thời 2 nút đóng + mở 
                         if ((u8PressedBtn & (DF_TOUCH_BTN_CS5 | DF_TOUCH_BTN_CS7)) == (DF_TOUCH_BTN_CS5 | DF_TOUCH_BTN_CS7)) {

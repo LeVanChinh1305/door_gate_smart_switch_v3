@@ -210,6 +210,7 @@ typedef enum {
     E_APP_RECONFIG_NONE   = 0,  // Chạy bình thường (NORMAL hoặc IDLE)
     E_APP_RECONFIG_BLUFI  = 1,  // Boot vào chế độ cấu hình BluFi
     E_APP_RECONFIG_UDP    = 2,  // Boot vào chế độ cấu hình UDP
+    E_APP_RECONFIG_BLE_MESH = 3, // Boot vào chế độ ble-mesh 
 } e_app_reconfig_flag_t;
 
 // Đọc cờ reconfig từ NVS (mặc định trả về E_APP_RECONFIG_NONE nếu chưa từng ghi)

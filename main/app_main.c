@@ -21,7 +21,7 @@
 #include "app_logic_schedule.h"
 #include "app_logic_extra_config.h"
 #include "app_udp.h"
-// #include "app_ble_mesh.h"
+#include "app_ble_mesh.h"
 #include "app_logic_ble_ibeacon.h"
 
 static const char *TAG = "APP_MAIN";
@@ -94,6 +94,16 @@ static void app_main_RunConfigMode(uint8_t u8Flag)
             ESP_LOGW(TAG, "Init Wi-Fi STA cho BluFi gặp sự cố: %s", esp_err_to_name(eWifiRet));
         }
         (void)app_blufi_Init();
+    }else if (u8Flag == E_APP_RECONFIG_BLE_MESH) {
+        /* NHÁNH MỚI: CHẾ ĐỘ BLE MESH PAIRING */
+        ESP_LOGI(TAG, "-> Kích hoạt BLE Mesh Pairing (Gateway Plus Scanning)...");
+        app_led_state_SetState(E_LED_STATE_CONNECT_BLE_MESH);
+        
+        /* Khởi tạo phát quảng bá Mesh Proxy Service 0x1828 */
+        esp_err_t eMeshErr = app_ble_mesh_Init();
+        if (eMeshErr != ESP_OK) {
+            ESP_LOGE(TAG, "Khởi tạo BLE Mesh thất bại: %s", esp_err_to_name(eMeshErr));
+        }
     } else if (u8Flag == E_APP_RECONFIG_UDP) {
         app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
         (void)app_udp_Init();

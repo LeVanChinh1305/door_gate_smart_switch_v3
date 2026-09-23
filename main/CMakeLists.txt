@@ -18,6 +18,6 @@ idf_component_register(
         app_logic_schedule
         app_logic_extra_config
         app_udp
-        # app_ble_mesh
+        app_ble_mesh
         app_logic_ble_ibeacon
 )
