@@ -2,6 +2,7 @@
 #include "app_ble_manager.h"
 
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "host/ble_hs.h"
 #include "host/ble_gap.h"
 #include "host/util/util.h"
@@ -13,15 +14,44 @@ static const char *TAG = "APP_BLE_IBEACON";
 
 static bool s_bRunning = false;
 
+/* Thời gian chống lặp gói tin (tính bằng microsecond: 5000000us = 5 giây) */
+#define IBEACON_DEBOUNCE_INTERVAL_US    (5000000LL)
+
+/* Biến lưu trữ thông tin gói tin gần nhất để lọc trùng */
+static uint8_t s_au8LastUuid[16] = {0};
+static int64_t s_i64LastProcessTimeUs = 0;
+
 /* Khai báo trước hàm GAP Event Callback */
 static int ibeacon_gap_event_cb(struct ble_gap_event *event, void *arg);
 
-/* ======================== LOG DỮ LIỆU IBEACON ======================== */
+/* ======================== XỬ LÝ LỌC TRÙNG & NGIỆM VỤ ======================== */
 
 /**
- * @brief In chi tiết dữ liệu gói tin iBeacon phát hiện được
+ * @brief Kiểm tra xem gói iBeacon có bị lặp lại trong khoảng thời gian Cooldown hay không
+ * @return true nếu là gói tin trùng cần BỎ QUA, false nếu là gói tin MỚI cần XỬ LÝ
  */
-static void log_ibeacon_payload(const uint8_t *data, uint8_t len, const ble_addr_t *addr)
+static bool is_duplicate_beacon(const uint8_t *pau8Uuid)
+{
+    int64_t i64NowUs = esp_timer_get_time();
+
+    /* Kiểm tra xem UUID có trùng với gói vừa xử lý không */
+    if (memcmp(s_au8LastUuid, pau8Uuid, 16) == 0) {
+        /* Nếu trùng UUID và chưa hết thời gian Cooldown (5 giây) -> Xác nhận trùng */
+        if ((i64NowUs - s_i64LastProcessTimeUs) < IBEACON_DEBOUNCE_INTERVAL_US) {
+            return true;
+        }
+    }
+
+    /* Lưu vết gói tin mới và thời điểm xử lý */
+    memcpy(s_au8LastUuid, pau8Uuid, 16);
+    s_i64LastProcessTimeUs = i64NowUs;
+    return false;
+}
+
+/**
+ * @brief In chi tiết dữ liệu gói tin iBeacon và xử lý logic
+ */
+static void process_ibeacon_payload(const uint8_t *data, uint8_t len, const ble_addr_t *addr)
 {
     /* Gói iBeacon Apple tiêu chuẩn: Company(2) + Type(1) + Len(1) + UUID(16) + Major(2) + Minor(2) + TX(1) = 25 bytes */
     if (len < 25) {
@@ -43,7 +73,14 @@ static void log_ibeacon_payload(const uint8_t *data, uint8_t len, const ble_addr
     uint16_t minor = (data[22] << 8) | data[23];
     int8_t tx_power = (int8_t)data[24];
 
-    ESP_LOGI(TAG, "================ [NHẬN DỮ LIỆU IBEACON] ================");
+    /* --- BƯỚC LỌC TRÙNG GÓI TIN --- */
+    if (is_duplicate_beacon(uuid)) {
+        /* Bỏ qua gói tin trùng lặp trong cửa sổ 5 giây, không in log dồn dập */
+        return;
+    }
+
+    /* Chỉ chạy tới đây NẾU LÀ GÓI TIN MỚI (xử lý 1 lần duy nhất) */
+    ESP_LOGI(TAG, "================ [NHẬN DỮ LIỆU IBEACON MỚI] ================");
     ESP_LOGI(TAG, "Từ MAC App/Phone : %02X:%02X:%02X:%02X:%02X:%02X",
              addr->val[5], addr->val[4], addr->val[3],
              addr->val[2], addr->val[1], addr->val[0]);
@@ -58,10 +95,11 @@ static void log_ibeacon_payload(const uint8_t *data, uint8_t len, const ble_addr
     ESP_LOGI(TAG, "Minor (2 bytes)  : 0x%04X (%u)", minor, minor);
     ESP_LOGI(TAG, "TX Power         : %d dBm", tx_power);
     
-    /* In toàn bộ chuỗi byte thô ở dạng HEX để soi dữ liệu */
     ESP_LOGI(TAG, "Raw Payload HEX:");
     ESP_LOG_BUFFER_HEX(TAG, data, len);
-    ESP_LOGI(TAG, "========================================================");
+    ESP_LOGI(TAG, "============================================================");
+
+    /* TODO: Gọi hàm giải mã AES-128 và đóng/ngắt Relay ở đây */
 }
 
 /* ======================== GAP EVENT CALLBACK ======================== */
@@ -80,7 +118,6 @@ static int ibeacon_gap_event_cb(struct ble_gap_event *event, void *arg)
             const uint8_t *p = desc->data;
             uint8_t remaining = desc->length_data;
 
-            /* Duyệt qua các trường AD (Advertising Data) */
             while (remaining >= 2) {
                 uint8_t field_len  = p[0];
                 uint8_t field_type = p[1];
@@ -91,7 +128,7 @@ static int ibeacon_gap_event_cb(struct ble_gap_event *event, void *arg)
 
                 /* Trường Manufacturer Specific Data (Type 0xFF) */
                 if (field_type == 0xFF && field_len >= 4) {
-                    log_ibeacon_payload(&p[2], field_len - 1, &desc->addr);
+                    process_ibeacon_payload(&p[2], field_len - 1, &desc->addr);
                 }
 
                 p += (field_len + 1);
@@ -101,11 +138,11 @@ static int ibeacon_gap_event_cb(struct ble_gap_event *event, void *arg)
         }
 
         case BLE_GAP_EVENT_DISC_COMPLETE:
-            /* Tự động lặp lại Scan khi hết thời gian chờ */
+            /* Tự động lặp lại Scan khi hết lượt */
             if (s_bRunning) {
                 struct ble_gap_disc_params params = {0};
-                params.filter_duplicates = 0; /* Cho phép nhận liên tục gói tin gửi đến */
-                params.passive = 1;           /* Quét thụ động (Passive Scan) */
+                params.filter_duplicates = 0; 
+                params.passive = 1;           
                 params.itvl = BLE_GAP_SCAN_FAST_INTERVAL_MIN;
                 params.window = BLE_GAP_SCAN_FAST_WINDOW;
                 (void)ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER, &params, ibeacon_gap_event_cb, NULL);
@@ -121,14 +158,13 @@ static int ibeacon_gap_event_cb(struct ble_gap_event *event, void *arg)
 
 static esp_err_t ibeacon_start_scan(void)
 {
-    /* 1. Nếu đang có tiến trình scan cũ, dừng hẳn trước khi bật lại */
     if (ble_gap_disc_active()) {
         (void)ble_gap_disc_cancel();
     }
 
     struct ble_gap_disc_params disc_params = {0};
-    disc_params.filter_duplicates = 0;   /* Nhận liên tục gói iBeacon */
-    disc_params.passive = 1;             /* Passive scan */
+    disc_params.filter_duplicates = 0;   
+    disc_params.passive = 1;             
     disc_params.itvl = BLE_GAP_SCAN_FAST_INTERVAL_MIN;
     disc_params.window = BLE_GAP_SCAN_FAST_WINDOW;
     disc_params.filter_policy = 0;
@@ -136,14 +172,12 @@ static esp_err_t ibeacon_start_scan(void)
 
     int rc = ble_gap_disc(BLE_OWN_ADDR_PUBLIC, BLE_HS_FOREVER,
                           &disc_params, ibeacon_gap_event_cb, NULL);
-
-    /* 2. Nếu báo lỗi 8 (EALREADY), bỏ qua vì scan thực tế đã/đang kích hoạt thành công */
     if (rc != 0 && rc != BLE_HS_EALREADY) {
         ESP_LOGE(TAG, "Bật Scan iBeacon thất bại: %d", rc);
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, ">>> SCAN IBEACON ĐÃ CHẠY HOÀN HẢO! (Đang lắng nghe App...)");
+    ESP_LOGI(TAG, ">>> ĐÃ BẬT SCAN IBEACON (Đã tích hợp lọc trùng gói tin 5s)...");
     return ESP_OK;
 }
 
@@ -160,7 +194,7 @@ static esp_err_t ibeacon_profile_init(void)
 {
     ble_svc_gap_init();
     ble_svc_gatt_init();
-    ESP_LOGI(TAG, "iBeacon Logger Profile Init");
+    ESP_LOGI(TAG, "iBeacon Profile Init");
     return ESP_OK;
 }
 
@@ -172,7 +206,7 @@ static esp_err_t ibeacon_profile_deinit(void)
 
 static void ibeacon_on_sync(void)
 {
-    ESP_LOGI(TAG, "NimBLE sync thành công → Bắt đầu SCAN và LOG");
+    ESP_LOGI(TAG, "NimBLE sync thành công → Bắt đầu SCAN");
     (void)ibeacon_start_scan();
 }
 
@@ -183,7 +217,7 @@ static const app_ble_profile_t s_sIbeaconProfile = {
     .on_sync           = ibeacon_on_sync,
     .on_reset          = NULL,
     .gatts_register_cb = NULL,
-    .start_adv         = NULL,  /* Đặt NULL để tránh app_ble_manager gọi trùng với on_sync */
+    .start_adv         = NULL,
     .stop_adv          = ibeacon_stop_scan,
 };
 
@@ -192,9 +226,13 @@ static const app_ble_profile_t s_sIbeaconProfile = {
 esp_err_t app_ble_ibeacon_Init(void)
 {
     if (s_bRunning) {
-        ESP_LOGW(TAG, "iBeacon Logger đã đang chạy");
+        ESP_LOGW(TAG, "iBeacon Module đã đang chạy");
         return ESP_OK;
     }
+
+    /* Reset bộ đệm lọc trùng */
+    memset(s_au8LastUuid, 0, sizeof(s_au8LastUuid));
+    s_i64LastProcessTimeUs = 0;
 
     esp_err_t ret = app_ble_manager_Init(&s_sIbeaconProfile);
     if (ret != ESP_OK) {
@@ -203,7 +241,7 @@ esp_err_t app_ble_ibeacon_Init(void)
     }
 
     s_bRunning = true;
-    ESP_LOGI(TAG, "Khởi động Module iBeacon Logger thành công!");
+    ESP_LOGI(TAG, "Khởi động Module iBeacon thành công!");
     return ESP_OK;
 }
 
@@ -215,7 +253,7 @@ esp_err_t app_ble_ibeacon_Deinit(void)
 
     (void)app_ble_manager_Deinit();
     s_bRunning = false;
-    ESP_LOGI(TAG, "Đã tắt Module iBeacon Logger");
+    ESP_LOGI(TAG, "Đã tắt Module iBeacon");
     return ESP_OK;
 }
 
