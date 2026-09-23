@@ -21,7 +21,8 @@
 #include "app_logic_schedule.h"
 #include "app_logic_extra_config.h"
 #include "app_udp.h"
-#include "app_ble_mesh.h"
+// #include "app_ble_mesh.h"
+#include "app_ble_ibeacon.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -234,7 +235,8 @@ void app_main(void) {
       /* Init BLE Mesh SỚM, ngay khi heap còn sạch nhất, TRƯỚC Wi-Fi STA/TLS/MQTT
          -> tránh Malloc failed do heap phân mảnh (xem log crash trước đó) */
       ESP_LOGI(TAG, "Khởi tạo BLE Mesh sớm (heap còn sạch)...");
-      (void)app_ble_mesh_Init();
+      //(void)app_ble_mesh_Init();
+      (void)app_ble_ibeacon_Init();
 
       // 4. Khởi tạo Wi-Fi STA
       eRet = app_wifi_InitSta();

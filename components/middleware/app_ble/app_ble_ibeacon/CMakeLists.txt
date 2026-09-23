@@ -1,0 +1,13 @@
+idf_component_register(
+    SRCS 
+        "app_ble_ibeacon.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        bt
+        nvs_flash
+        mbedtls
+        app_ble_manager
+        app_logic_relay
+        app_nvs
+)

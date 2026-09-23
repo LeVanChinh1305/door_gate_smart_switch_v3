@@ -23,6 +23,7 @@ set(EXTRA_COMPONENT_DIRS
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_ble/app_blufi
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_ble/app_ble_manager
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_ble/app_ble_mesh
+	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_ble/app_ble_ibeacon
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_mqtt 
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_sntp
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_ota
