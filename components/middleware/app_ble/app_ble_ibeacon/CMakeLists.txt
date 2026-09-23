@@ -5,9 +5,6 @@ idf_component_register(
         "include"
     REQUIRES 
         bt
-        nvs_flash
-        mbedtls
         app_ble_manager
-        app_logic_relay
-        app_nvs
+        app_logic_ble_ibeacon
 )

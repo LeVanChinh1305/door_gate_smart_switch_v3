@@ -18,6 +18,7 @@ set(EXTRA_COMPONENT_DIRS
 	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_mqtt_publisher
 	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_schedule
 	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_telemetry
+	${CMAKE_CURRENT_LIST_DIR}/components/app/logic/app_logic_ble_ibeacon
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_nvs
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_wifi
 	${CMAKE_CURRENT_LIST_DIR}/components/middleware/app_ble/app_blufi

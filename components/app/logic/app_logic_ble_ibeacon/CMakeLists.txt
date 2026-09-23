@@ -1,0 +1,11 @@
+idf_component_register(
+    SRCS 
+        "app_logic_ble_ibeacon.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        mbedtls
+        app_ble_ibeacon
+        app_logic_relay
+        app_nvs
+)

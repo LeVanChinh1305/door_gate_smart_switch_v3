@@ -22,7 +22,7 @@
 #include "app_logic_extra_config.h"
 #include "app_udp.h"
 // #include "app_ble_mesh.h"
-#include "app_ble_ibeacon.h"
+#include "app_logic_ble_ibeacon.h"
 
 static const char *TAG = "APP_MAIN";
 
@@ -236,7 +236,9 @@ void app_main(void) {
          -> tránh Malloc failed do heap phân mảnh (xem log crash trước đó) */
       ESP_LOGI(TAG, "Khởi tạo BLE Mesh sớm (heap còn sạch)...");
       //(void)app_ble_mesh_Init();
-      (void)app_ble_ibeacon_Init();
+      /* 2. Khởi tạo BLE iBeacon Async Logic thay thế cho BLE Mesh cũ */
+      ESP_LOGI(TAG, "Khởi tạo BLE iBeacon Gate Control sớm (heap còn sạch)...");
+      (void)app_logic_ble_ibeacon_Init();
 
       // 4. Khởi tạo Wi-Fi STA
       eRet = app_wifi_InitSta();
