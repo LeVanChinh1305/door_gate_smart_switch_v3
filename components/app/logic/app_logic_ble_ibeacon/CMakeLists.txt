@@ -8,4 +8,5 @@ idf_component_register(
         app_ble_ibeacon
         app_logic_relay
         app_nvs
+        app_led_state
 )

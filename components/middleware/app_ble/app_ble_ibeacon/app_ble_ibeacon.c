@@ -29,7 +29,7 @@ typedef struct __attribute__((packed)) {
     uint64_t u64TimestampMs;
     uint8_t  au8DeviceMac[6];
     uint8_t  u8Command;
-    uint8_t  u8Source;
+    uint8_t  u8Value;    /*!< Giá trị điều khiển theo % (0 - 100%) */
 } ibeacon_decrypted_payload_t;
 
 static int ibeacon_gap_event_cb(struct ble_gap_event *event, void *arg);
@@ -63,8 +63,7 @@ static bool is_target_for_this_device(const uint8_t *pau8Uuid)
     if (app_nvs_LoadDeviceConfig(&sNvsCfg) == ESP_OK && strlen(sNvsCfg.api_secret_key) >= 32) {
         memcpy(acSecretKey, sNvsCfg.api_secret_key, 32);
     } else {
-        const char *pcDefaultKey = "VCONNEX_SMART_GATE_SECRET_KEY_32";
-        memcpy(acSecretKey, pcDefaultKey, 32);
+        ESP_LOGE(TAG, "chưa có secrect key để giải mã lệnh ibeacon"); 
     }
 
     uint8_t au8Iv[16];

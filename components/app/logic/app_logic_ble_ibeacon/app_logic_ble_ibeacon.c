@@ -12,6 +12,7 @@
 #include "mbedtls/aes.h"
 #include <string.h>
 #include <time.h>
+#include "app_led_state.h"
 
 static const char *TAG = "APP_LOGIC_BLE_IBEACON";
 
@@ -27,7 +28,7 @@ typedef struct __attribute__((packed)) {
     uint64_t u64TimestampMs;  /*!< 8 bytes: Timestamp dạng Milliseconds (Big Endian) */
     uint8_t  au8DeviceMac[6];  /*!< 6 bytes: MAC của thiết bị ESP32 */
     uint8_t  u8Command;        /*!< 1 byte : Mã lệnh (1: Gate 1, 2: Gate 2, 3: Stop) */
-    uint8_t  u8Source;         /*!< 1 byte : Sub-command / Source */
+    uint8_t  u8Value;          /*!< 1 byte : Giá trị điều khiển theo % (0 - 100%) */
 } ibeacon_decrypted_payload_t;
 
 static bool s_bTaskRunning = false;
@@ -107,19 +108,56 @@ static void decrypt_and_dispatch(const app_ble_ibeacon_msg_t *pMsg)
              pMsg->au8Mac[0], pMsg->au8Mac[1], pMsg->au8Mac[2],
              pMsg->au8Mac[3], pMsg->au8Mac[4], pMsg->au8Mac[5], pMsg->i8Rssi);
     ESP_LOGI(TAG, "Timestamp : %llu ms", u64MsgTimeMs);
-    ESP_LOGI(TAG, "Command ID: %u", sPayload.u8Command);
+    ESP_LOGI(TAG, "Command ID: %u | Control Value: %u%%", sPayload.u8Command, sPayload.u8Value);
     ESP_LOGI(TAG, "===============================================================");
+    int iValue = sPayload.u8Value; 
 
     /* 5. Dispatch lệnh điều khiển Rơ-le local */
     switch (sPayload.u8Command) {
         case 1:
-            ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: MỞ CỔNG 1");
+            if (iValue == 1){
+                 ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: Đóng CỔNG ");
+                (void)app_logic_relay_Close();
+                (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
+            }
             break;
         case 2:
-            ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: MỞ CỔNG 2");
+            if (iValue == 1){
+                ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: dừng cổng ");
+                (void)app_logic_relay_Stop();
+                (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
+            }
             break;
         case 3:
-            ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: DỪNG CỔNG (STOP)");
+            if (iValue == 1){
+                ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: Mở cổng");
+                (void)app_logic_relay_Open();
+                (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
+            }
+            break;
+        case 4: 
+            if (iValue >= 0 && iValue <= 100){
+                ESP_LOGI(TAG, "-> Lệnh BLE LOCAL HỢP LỆ: Mở đến %u%%", sPayload.u8Value);
+                uint8_t u8TargetVal = (uint8_t)iValue;
+                uint8_t u8CurrentVal = app_logic_relay_GetCurrentLevel();
+                
+                ESP_LOGI(TAG, "-> Thực thi lệnh: Điều khiển cửa đến mức %u%% (Hiện tại: %u%%)", u8TargetVal, u8CurrentVal);
+                
+                if (u8TargetVal > u8CurrentVal) {
+                    (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
+                } else if (u8TargetVal < u8CurrentVal) {
+                    (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
+                } else {
+                    (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
+                }
+                app_logic_relay_SetLevel(u8TargetVal);
+            }
+            break;
+        case 5: 
+            if(iValue == 1){
+                ESP_LOGI(TAG, "-> Khớp lệnh mở khe thoáng (gate_open_gap)");
+                app_logic_relay_OpenVentilationGap();
+            }
             break;
         default:
             ESP_LOGW(TAG, "Mã lệnh không hợp lệ: %u", sPayload.u8Command);
