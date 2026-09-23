@@ -9,4 +9,6 @@ idf_component_register(
         app_logic_relay
         app_nvs
         app_led_state
+        app_logic_telemetry
+        common
 )

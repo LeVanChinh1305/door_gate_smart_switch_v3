@@ -13,12 +13,12 @@
 #include <string.h>
 #include <time.h>
 #include "app_led_state.h"
+#include "app_logic_telemetry.h"
+#include "app_common.h"
 
 static const char *TAG = "APP_LOGIC_BLE_IBEACON";
 
 #define LOGIC_IBEACON_QUEUE_SIZE          4
-#define LOGIC_IBEACON_TASK_STACK_SIZE     4096
-#define LOGIC_IBEACON_TASK_PRIO           5
 
 /* Ngưỡng lệch thời gian tối đa cho phép (10 giây = 10000 ms) */
 #define TIMESTAMP_MAX_ALLOWED_DELTA_MS    (10000ULL)
@@ -111,6 +111,10 @@ static void decrypt_and_dispatch(const app_ble_ibeacon_msg_t *pMsg)
     ESP_LOGI(TAG, "Command ID: %u | Control Value: %u%%", sPayload.u8Command, sPayload.u8Value);
     ESP_LOGI(TAG, "===============================================================");
     int iValue = sPayload.u8Value; 
+    //khai báo biến sLog cho gửi cloud
+    app_logic_control_history_item_t sLog;
+    (void)memset(&sLog, 0, sizeof(app_logic_control_history_item_t));
+    const char *acSrcIdBle = "";
 
     /* 5. Dispatch lệnh điều khiển Rơ-le local */
     switch (sPayload.u8Command) {
@@ -119,6 +123,8 @@ static void decrypt_and_dispatch(const app_ble_ibeacon_msg_t *pMsg)
                  ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: Đóng CỔNG ");
                 (void)app_logic_relay_Close();
                 (void)app_led_state_SetState(E_LED_STATE_GATE_DOWN);
+                app_logic_telemetry_BuildControlItem(&sLog, "gate_1", E_TELEMETRY_MODE_CLOSE, E_TELEMETRY_SRC_BLE_BACKUP, acSrcIdBle, NULL);
+                (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
             }
             break;
         case 2:
@@ -126,6 +132,8 @@ static void decrypt_and_dispatch(const app_ble_ibeacon_msg_t *pMsg)
                 ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: dừng cổng ");
                 (void)app_logic_relay_Stop();
                 (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
+                app_logic_telemetry_BuildControlItem(&sLog, "gate_2", E_TELEMETRY_MODE_STOP, E_TELEMETRY_SRC_BLE_BACKUP, acSrcIdBle, NULL);
+                (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
             }
             break;
         case 3:
@@ -133,6 +141,8 @@ static void decrypt_and_dispatch(const app_ble_ibeacon_msg_t *pMsg)
                 ESP_LOGI(TAG, "-> LỆNH BLE LOCAL HỢP LỆ: Mở cổng");
                 (void)app_logic_relay_Open();
                 (void)app_led_state_SetState(E_LED_STATE_GATE_UP);
+                app_logic_telemetry_BuildControlItem(&sLog, "gate_3", E_TELEMETRY_MODE_OPEN, E_TELEMETRY_SRC_BLE_BACKUP, acSrcIdBle, NULL);
+                (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
             }
             break;
         case 4: 
@@ -151,6 +161,9 @@ static void decrypt_and_dispatch(const app_ble_ibeacon_msg_t *pMsg)
                     (void)app_led_state_SetState(E_LED_STATE_GATE_STOP);
                 }
                 app_logic_relay_SetLevel(u8TargetVal);
+                app_logic_telemetry_BuildControlItem(&sLog, "open_level", E_TELEMETRY_MODE_PERCENT, E_TELEMETRY_SRC_BLE_BACKUP, acSrcIdBle, NULL);
+                sLog.i32Value = (int32_t)u8TargetVal;
+                (void)app_logic_telemetry_ReportControlHistory(&sLog, 1);
             }
             break;
         case 5: 
@@ -191,8 +204,7 @@ esp_err_t app_logic_ble_ibeacon_Init(void)
 
     s_bTaskRunning = true;
 
-    BaseType_t xRet = xTaskCreate(app_logic_ble_ibeacon_Task, "app_logic_ibeacon_task",
-                                  LOGIC_IBEACON_TASK_STACK_SIZE, NULL, LOGIC_IBEACON_TASK_PRIO, &s_xTaskHandle);
+    BaseType_t xRet = xTaskCreate(app_logic_ble_ibeacon_Task, "app_logic_ibeacon_task",DF_TASK_STACK_LARGE, NULL, DF_TASK_PRIO_CRITICAL, &s_xTaskHandle);
     if (xRet != pdPASS) {
         ESP_LOGE(TAG, "Tạo Task thất bại!");
         vQueueDelete(s_xIbeaconQueue);
