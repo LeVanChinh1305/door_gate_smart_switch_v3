@@ -226,9 +226,11 @@ static void app_logic_relay_TrackingTask(void *arg) {
                 g_u8TargetLevel = g_u8CurrentLevel; /* Ép đồng bộ chốt chặn */
                 if((g_u8CurrentLevel == 0U) || (g_u8CurrentLevel == 100U)){
                     app_logic_sensor_history_item_t sSensorLog;
-                    sSensorLog.i64Time = 0; // hàm report tự động gán rồi
-                    sSensorLog.u8SensorState = (g_u8CurrentLevel == 100U) ? 1U : 0U; // 1 mở / 0 đóng
-                    (void) app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1); 
+                    // hàm report tự động gán rồi
+                    sSensorLog.i64Time = 0;
+                    // 1 mở / 0 đóng
+                    sSensorLog.u8SensorState = (g_u8CurrentLevel == 100U) ? 1U : 0U;
+                    (void)app_logic_telemetry_ReportSensorHistory(&sSensorLog, 1);
                 }
                 app_logic_relay_UpdateAppUI();
             }
@@ -461,8 +463,7 @@ static void app_logic_relay_Task(void *pArg)
                      *    -> Bất kỳ tín hiệu nào từ cảm biến chuẩn tại thời điểm này đều được coi là va chạm,
                      *       xử lý theo HƯỚNG DI CHUYỂN HIỆN TẠI chứ không phụ thuộc raw level (0/1) của GPIO,
                      *       vì cảm biến có dây chuẩn có thể báo mức khác nhau tùy vị trí lắp đặt. */
-                    ESP_LOGW(TAG, "Phát hiện va chạm Cảm biến chuẩn! Hướng chạy hiện tại: %d, raw_level: %d",
-                             (int)g_i8Direction, (int)sMsg.u32PulseDurationMs);
+                    ESP_LOGW(TAG, "Phát hiện va chạm Cảm biến chuẩn! Hướng chạy hiện tại: %d, raw_level: %d", (int)g_i8Direction, (int)sMsg.u32PulseDurationMs);
 
                     /* 1. Dừng Relay khẩn cấp */
                     (void)app_relay_TriggerPulse(E_RELAY_CMD_STOP, DF_RELAY_DEFAULT_PULSE_DURATION_MS);
@@ -560,31 +561,20 @@ esp_err_t app_logic_relay_Init(void)
         if (app_header2h_Read(&i32InitLevel) == ESP_OK) {
             g_u8CurrentLevel = (i32InitLevel == DF_HEADER2H_STATE_CLOSED) ? 0U : 100U;
             g_u8TargetLevel = g_u8CurrentLevel;
-            ESP_LOGI(TAG, "Trạng thái cảm biến cửa ban đầu: %s (%u%%)",
-                     (i32InitLevel == DF_HEADER2H_STATE_CLOSED) ? "ĐÓNG" : "MỞ",
-                     (unsigned int)g_u8CurrentLevel);
+            ESP_LOGI(TAG, "Trạng thái cảm biến cửa ban đầu: %s (%u%%)", (i32InitLevel == DF_HEADER2H_STATE_CLOSED) ? "ĐÓNG" : "MỞ", (unsigned int)g_u8CurrentLevel);
         }
     }
 
     /* 5. Tạo Software Timer cho việc kích hoạt lại cảm biến sau 10 giây */
     if (g_hSensorReenableTimer == NULL) {
-        g_hSensorReenableTimer = xTimerCreate("tmr_sensor_en",
-                                              pdMS_TO_TICKS(DF_SENSOR_REENABLE_TIMEOUT_MS),
-                                              pdFALSE,
-                                              NULL,
-                                              prv_SensorReenableTimerCb);
+        g_hSensorReenableTimer = xTimerCreate("tmr_sensor_en", pdMS_TO_TICKS(DF_SENSOR_REENABLE_TIMEOUT_MS), pdFALSE, NULL, prv_SensorReenableTimerCb);
         if (g_hSensorReenableTimer == NULL) {
             ESP_LOGW(TAG, "Tạo timer kích hoạt lại cảm biến thất bại");
         }
     }
 
     /* 6. Tạo task thực thi relay (Dùng STACK_LARGE vì task gọi cJSON và MQTT Publish) */
-    BaseType_t xTaskResult = xTaskCreate(app_logic_relay_Task,
-                                         "relay_logic",
-                                         DF_TASK_STACK_LARGE,
-                                         NULL,
-                                         DF_TASK_PRIO_CRITICAL,
-                                         &g_hRelayTask);
+    BaseType_t xTaskResult = xTaskCreate(app_logic_relay_Task, "relay_logic", DF_TASK_STACK_LARGE, NULL, DF_TASK_PRIO_CRITICAL, &g_hRelayTask);
     if (xTaskResult != pdPASS) {
         ESP_LOGE(TAG, "Tạo task xử lý relay thất bại");
         vQueueDelete(g_hRelayCommandQueue);
@@ -599,12 +589,7 @@ esp_err_t app_logic_relay_Init(void)
     }
 
     /* 7. Tạo task tracking hành trình */
-    xTaskResult = xTaskCreate(app_logic_relay_TrackingTask,
-                              "relay_tracking",
-                              DF_TASK_STACK_LARGE, 
-                              NULL,
-                              DF_TASK_PRIO_NORMAL,
-                              NULL);
+    xTaskResult = xTaskCreate(app_logic_relay_TrackingTask, "relay_tracking", DF_TASK_STACK_LARGE, NULL, DF_TASK_PRIO_NORMAL, NULL);
     if (xTaskResult != pdPASS) {
         ESP_LOGE(TAG, "Tạo task tracking relay thất bại");
         vQueueDelete(g_hRelayCommandQueue);
@@ -680,7 +665,8 @@ esp_err_t app_logic_relay_Close(void)
 esp_err_t app_logic_relay_Stop(void)
 {
     if (g_u8GateOpenGapState == 1U) {
-        g_u8GateOpenGapState = 2U; // 2: Bị dừng giữa chừng / Cửa chưa đóng hết
+        // 2: Bị dừng giữa chừng / Cửa chưa đóng hết
+        g_u8GateOpenGapState = 2U;
     }
     app_logic_relay_msg_t sMsg = {
         .eCmd = E_APP_LOGIC_RELAY_CMD_STOP,
@@ -731,18 +717,18 @@ esp_err_t app_logic_relay_SendCommand(e_app_relay_cmd_t eCommand)
     return app_logic_relay_SendMsg(&sMsg);
 }
 
+esp_err_t app_logic_relay_SetLevel(uint8_t u8Level)
+{
+    if (u8Level > 100U) {
+        u8Level = 100U;
+    }
 
-esp_err_t app_logic_relay_SetLevel(uint8_t u8Level) {
-  if (u8Level > 100U) {
-    u8Level = 100U;
-  }
-
-  if (u8Level > g_u8CurrentLevel) {
-    app_logic_relay_Open(); 
-    g_u8TargetLevel = u8Level; 
-  }else if (u8Level < g_u8CurrentLevel) {
-    app_logic_relay_Close();
-    g_u8TargetLevel = u8Level; 
-  }
-  return ESP_OK; 
+    if (u8Level > g_u8CurrentLevel) {
+        app_logic_relay_Open();
+        g_u8TargetLevel = u8Level;
+    } else if (u8Level < g_u8CurrentLevel) {
+        app_logic_relay_Close();
+        g_u8TargetLevel = u8Level;
+    }
+    return ESP_OK;
 }

@@ -10,100 +10,80 @@
 static const char *TAG = "APP_NVS";
 app_extra_config_t g_sExtraConfig;
 
-#define DF_APP_STORAGE_KEY_DEV_TYPE "dev_type"
-#define DF_APP_STORAGE_KEY_DEV_EXT_ADDR "dev_ext_addr"
-#define DF_APP_STORAGE_KEY_BROKER "broker"
-#define DF_APP_STORAGE_KEY_USERNAME "mqtt_user"
-#define DF_APP_STORAGE_KEY_PASSWORD "mqtt_pass"
-#define DF_APP_STORAGE_KEY_MQTT_SUB "mqtt_sub"
-#define DF_APP_STORAGE_KEY_MQTT_PUB "mqtt_pub"
-#define DF_APP_STORAGE_KEY_MQTT_ALERT "mqtt_alert"
-#define DF_APP_STORAGE_KEY_FORCE_OTA_URL "ota_url"
-#define DF_APP_STORAGE_KEY_BE_SHARED_KEY "be_key"
-#define DF_APP_STORAGE_KEY_API_URL "api_url"
+#define DF_APP_STORAGE_KEY_DEV_TYPE       "dev_type"
+#define DF_APP_STORAGE_KEY_DEV_EXT_ADDR   "dev_ext_addr"
+#define DF_APP_STORAGE_KEY_BROKER         "broker"
+#define DF_APP_STORAGE_KEY_USERNAME       "mqtt_user"
+#define DF_APP_STORAGE_KEY_PASSWORD       "mqtt_pass"
+#define DF_APP_STORAGE_KEY_MQTT_SUB       "mqtt_sub"
+#define DF_APP_STORAGE_KEY_MQTT_PUB       "mqtt_pub"
+#define DF_APP_STORAGE_KEY_MQTT_ALERT     "mqtt_alert"
+#define DF_APP_STORAGE_KEY_FORCE_OTA_URL  "ota_url"
+#define DF_APP_STORAGE_KEY_BE_SHARED_KEY  "be_key"
+#define DF_APP_STORAGE_KEY_API_URL        "api_url"
 #define DF_APP_STORAGE_KEY_API_SECRET_KEY "api_secret"
-#define DF_APP_STORAGE_KEY_USER_ID "user_id"
+#define DF_APP_STORAGE_KEY_USER_ID        "user_id"
 
-static esp_err_t
-app_nvs_SaveDeviceConfigToHandle(nvs_handle_t hHandle,
-                                 const app_nvs_device_config_t *config) {
-  DF_RETURN_IF_ERROR(
-      nvs_set_i32(hHandle, DF_APP_STORAGE_KEY_DEV_TYPE, config->dev_type));
-  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_DEV_EXT_ADDR,
-                                 config->dev_ext_addr));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_BROKER, config->broker));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_USERNAME, config->username));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_PASSWORD, config->password));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_MQTT_SUB, config->mqtt_sub));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_MQTT_PUB, config->mqtt_pub));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_MQTT_ALERT, config->mqtt_alert));
-  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_FORCE_OTA_URL,
-                                 config->force_ota_url));
-  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_BE_SHARED_KEY,
-                                 config->be_shared_key));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_API_URL, config->api_url));
-  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_API_SECRET_KEY,
-                                 config->api_secret_key));
-  DF_RETURN_IF_ERROR(
-      nvs_set_str(hHandle, DF_APP_STORAGE_KEY_USER_ID, config->user_id));
-  DF_RETURN_IF_ERROR(
-      nvs_set_u8(hHandle, DF_APP_STORAGE_KEY_DEV_PROVISIONED, 1U));
+static esp_err_t app_nvs_SaveDeviceConfigToHandle(nvs_handle_t hHandle, const app_nvs_device_config_t *config) {
+  DF_RETURN_IF_ERROR(nvs_set_i32(hHandle, DF_APP_STORAGE_KEY_DEV_TYPE, config->dev_type));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_DEV_EXT_ADDR, config->dev_ext_addr));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_BROKER, config->broker));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_USERNAME, config->username));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_PASSWORD, config->password));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_MQTT_SUB, config->mqtt_sub));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_MQTT_PUB, config->mqtt_pub));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_MQTT_ALERT, config->mqtt_alert));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_FORCE_OTA_URL,config->force_ota_url));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_BE_SHARED_KEY,config->be_shared_key));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_API_URL, config->api_url));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_API_SECRET_KEY,config->api_secret_key));
+  DF_RETURN_IF_ERROR(nvs_set_str(hHandle, DF_APP_STORAGE_KEY_USER_ID, config->user_id));
+  DF_RETURN_IF_ERROR(nvs_set_u8(hHandle, DF_APP_STORAGE_KEY_DEV_PROVISIONED, 1U));
   return nvs_commit(hHandle);
 }
 
-static esp_err_t
-app_nvs_LoadDeviceConfigFromHandle(nvs_handle_t hHandle,
-                                   app_nvs_device_config_t *config) {
+static esp_err_t app_nvs_LoadDeviceConfigFromHandle(nvs_handle_t hHandle, app_nvs_device_config_t *config) {
   size_t zLen;
   int32_t i32DevType = 0;
 
-  DF_RETURN_IF_ERROR(
-      nvs_get_i32(hHandle, DF_APP_STORAGE_KEY_DEV_TYPE, &i32DevType));
+  DF_RETURN_IF_ERROR(nvs_get_i32(hHandle, DF_APP_STORAGE_KEY_DEV_TYPE, &i32DevType));
   config->dev_type = i32DevType;
 
   zLen = sizeof(config->dev_ext_addr);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_DEV_EXT_ADDR,
-                                 config->dev_ext_addr, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_DEV_EXT_ADDR,config->dev_ext_addr, &zLen));
+
   zLen = sizeof(config->broker);
-  DF_RETURN_IF_ERROR(
-      nvs_get_str(hHandle, DF_APP_STORAGE_KEY_BROKER, config->broker, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_BROKER, config->broker, &zLen));
+
   zLen = sizeof(config->username);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_USERNAME,
-                                 config->username, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_USERNAME,config->username, &zLen));
+
   zLen = sizeof(config->password);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_PASSWORD,
-                                 config->password, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_PASSWORD,config->password, &zLen));
+
   zLen = sizeof(config->mqtt_sub);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_MQTT_SUB,
-                                 config->mqtt_sub, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_MQTT_SUB, config->mqtt_sub, &zLen));
+
   zLen = sizeof(config->mqtt_pub);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_MQTT_PUB,
-                                 config->mqtt_pub, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_MQTT_PUB, config->mqtt_pub, &zLen));
+
   zLen = sizeof(config->mqtt_alert);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_MQTT_ALERT,
-                                 config->mqtt_alert, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_MQTT_ALERT, config->mqtt_alert, &zLen));
+
   zLen = sizeof(config->force_ota_url);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_FORCE_OTA_URL,
-                                 config->force_ota_url, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_FORCE_OTA_URL, config->force_ota_url, &zLen));
+
   zLen = sizeof(config->be_shared_key);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_BE_SHARED_KEY,
-                                 config->be_shared_key, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_BE_SHARED_KEY,config->be_shared_key, &zLen));
+
   zLen = sizeof(config->api_url);
-  DF_RETURN_IF_ERROR(
-      nvs_get_str(hHandle, DF_APP_STORAGE_KEY_API_URL, config->api_url, &zLen));
+  DF_RETURN_IF_ERROR( nvs_get_str(hHandle, DF_APP_STORAGE_KEY_API_URL, config->api_url, &zLen));
+
   zLen = sizeof(config->api_secret_key);
-  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_API_SECRET_KEY,
-                                 config->api_secret_key, &zLen));
+  DF_RETURN_IF_ERROR(nvs_get_str(hHandle, DF_APP_STORAGE_KEY_API_SECRET_KEY, config->api_secret_key, &zLen));
+
   zLen = sizeof(config->user_id);
-  return nvs_get_str(hHandle, DF_APP_STORAGE_KEY_USER_ID, config->user_id,
-                     &zLen);
+  return nvs_get_str(hHandle, DF_APP_STORAGE_KEY_USER_ID, config->user_id, &zLen);
 }
 
 esp_err_t app_nvs_InitNvs(void) {
@@ -182,11 +162,9 @@ esp_err_t app_nvs_SaveWifiConfig(const wifi_config_t *config) {
   {
     eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
     if (eErr == ESP_OK) {
-      eErr = nvs_set_str(hHandle, DF_APP_STORAGE_KEY_WIFI_SSID,
-                         (const char *)&config->sta.ssid);
+      eErr = nvs_set_str(hHandle, DF_APP_STORAGE_KEY_WIFI_SSID,(const char *)&config->sta.ssid);
       if (eErr == ESP_OK) {
-        eErr = nvs_set_str(hHandle, DF_APP_STORAGE_KEY_WIFI_PASS,
-                           (const char *)&config->sta.password);
+        eErr = nvs_set_str(hHandle, DF_APP_STORAGE_KEY_WIFI_PASS,(const char *)&config->sta.password);
       }
       if (eErr == ESP_OK) {
         eErr = nvs_commit(hHandle);
@@ -210,12 +188,10 @@ esp_err_t app_nvs_LoadWifiConfig(wifi_config_t *config) {
     eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hHandle);
     if (eErr == ESP_OK) {
       size_t zLen = sizeof(config->sta.ssid);
-      eErr = nvs_get_str(hHandle, DF_APP_STORAGE_KEY_WIFI_SSID,
-                         (char *)config->sta.ssid, &zLen);
+      eErr = nvs_get_str(hHandle, DF_APP_STORAGE_KEY_WIFI_SSID,(char *)config->sta.ssid, &zLen);
       if (eErr == ESP_OK) {
         zLen = sizeof(config->sta.password);
-        eErr = nvs_get_str(hHandle, DF_APP_STORAGE_KEY_WIFI_PASS,
-                           (char *)config->sta.password, &zLen);
+        eErr = nvs_get_str(hHandle, DF_APP_STORAGE_KEY_WIFI_PASS,(char *)config->sta.password, &zLen);
       }
       (void)nvs_close(hHandle);
     }
@@ -248,18 +224,15 @@ esp_err_t app_nvs_SaveDeviceConfig(const app_nvs_device_config_t *config) {
   DF_CHECK_NULL_PARAM(config);
 
   nvs_handle_t hHandle = 0U;
-  esp_err_t eErr =
-      nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
+  esp_err_t eErr =nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
   if (eErr != ESP_OK) {
-    ESP_LOGE(TAG, "Mở NVS để lưu cấu hình thiết bị thất bại: %s",
-             esp_err_to_name(eErr));
+    ESP_LOGE(TAG, "Mở NVS để lưu cấu hình thiết bị thất bại: %s", esp_err_to_name(eErr));
     return eErr;
   }
 
   eErr = app_nvs_SaveDeviceConfigToHandle(hHandle, config);
   if (eErr == ESP_OK) {
-    ESP_LOGI(TAG, "Đã lưu cấu hình thiết bị vào NVS (devT=%d)",
-             config->dev_type);
+    ESP_LOGI(TAG, "Đã lưu cấu hình thiết bị vào NVS (devT=%d)", config->dev_type);
   }
 
   if (eErr != ESP_OK) {
@@ -275,8 +248,7 @@ esp_err_t app_nvs_LoadDeviceConfig(app_nvs_device_config_t *config) {
   memset(config, 0, sizeof(app_nvs_device_config_t));
 
   nvs_handle_t hHandle = 0U;
-  esp_err_t eErr =
-      nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hHandle);
+  esp_err_t eErr =nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hHandle);
   if (eErr != ESP_OK) {
     return eErr;
   }
@@ -291,8 +263,7 @@ bool app_nvs_IsProvisionedDeviceConfig(void) {
   uint8_t u8Value = 0U;
   bool bIsProvisioned = false;
 
-  esp_err_t eErr =
-      nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hHandle);
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READONLY, &hHandle);
   if (eErr == ESP_OK) {
     eErr = nvs_get_u8(hHandle, DF_APP_STORAGE_KEY_DEV_PROVISIONED, &u8Value);
     if ((eErr == ESP_OK) && (u8Value == 1U)) {
@@ -361,17 +332,14 @@ esp_err_t app_nvs_SaveExtraConfig(const app_extra_config_t *config) {
   DF_CHECK_NULL_PARAM(config);
 
   nvs_handle_t hHandle = 0U;
-  esp_err_t eErr =
-      nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
+  esp_err_t eErr = nvs_open(DF_APP_STORAGE_NVS_NAMESPACE, NVS_READWRITE, &hHandle);
   if (eErr != ESP_OK) {
-    ESP_LOGE(TAG, "Mở NVS để lưu Extra Config thất bại: %s",
-             esp_err_to_name(eErr));
+    ESP_LOGE(TAG, "Mở NVS để lưu Extra Config thất bại: %s", esp_err_to_name(eErr));
     return eErr;
   }
 
   /* Lưu toàn bộ struct xuống NVS dưới dạng Blob */
-  eErr = nvs_set_blob(hHandle, DF_APP_STORAGE_KEY_EXTRA_CONFIG, config,
-                      sizeof(app_extra_config_t));
+  eErr = nvs_set_blob(hHandle, DF_APP_STORAGE_KEY_EXTRA_CONFIG, config,sizeof(app_extra_config_t));
   if (eErr == ESP_OK) {
     eErr = nvs_commit(hHandle);
     ESP_LOGI(TAG, "Đã lưu Extra Config vào NVS");
@@ -397,13 +365,10 @@ esp_err_t app_nvs_LoadExtraConfig(app_extra_config_t *config) {
   }
 
   size_t required_size = sizeof(app_extra_config_t);
-  eErr = nvs_get_blob(hHandle, DF_APP_STORAGE_KEY_EXTRA_CONFIG, config,
-                      &required_size);
+  eErr = nvs_get_blob(hHandle, DF_APP_STORAGE_KEY_EXTRA_CONFIG, config, &required_size);
 
   if (eErr == ESP_ERR_NVS_NOT_FOUND) {
-    ESP_LOGW(
-        TAG,
-        "Extra Config chưa từng được lưu, tiến hành dùng giá trị mặc định");
+    ESP_LOGW(TAG,"Extra Config chưa từng được lưu, tiến hành dùng giá trị mặc định");
   } else if (eErr != ESP_OK) {
     ESP_LOGE(TAG, "Lỗi đọc Extra Config: %s", esp_err_to_name(eErr));
   } else {

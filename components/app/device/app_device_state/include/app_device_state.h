@@ -24,31 +24,33 @@ uint32_t get_current_door_mode_mask(void);
 bool app_device_state_HasMode(device_mode_t eMode);
 void app_device_state_SetModeBit(device_mode_t eMode, bool bEnable);
 
-
 /* Các enum và API khác giữ nguyên */
 typedef enum {
     CONTROL_MODE_ROLLING_VENT,
     CONTROL_MODE_ROLLING_NORMAL,
     CONTROL_MODE_GATE_1LEAF,
     CONTROL_MODE_GATE_2LEAF,
-    CONTROL_MODE_GATE_SLIDING, 
-    CONTROL_MODE_GATE_CURTAIN  
+    CONTROL_MODE_GATE_SLIDING,
+    CONTROL_MODE_GATE_CURTAIN
 } control_mode_t;
+
 control_mode_t get_current_control_mode(void);
 void set_current_control_mode(control_mode_t mode);
 
 typedef enum {
-    SENSOR_TYPE_NONE, 
-    SENSOR_TYPE_WIRE, 
+    SENSOR_TYPE_NONE,
+    SENSOR_TYPE_WIRE,
     SENSOR_TYPE_BLE
-} sensor_type_t; 
+} sensor_type_t;
+
 sensor_type_t get_current_sensor_type(void);
-void set_current_sensor_type(sensor_type_t type); 
+void set_current_sensor_type(sensor_type_t type);
 
 typedef enum {
-    SENSOR_WIRE_TYPE_NONE, 
+    SENSOR_WIRE_TYPE_NONE,
     SENSOR_WIRE_TYPE_DOOR_STATE,
     SENSOR_WIRE_TYPE_ANTI_STUCK
-} sensor_wire_type_t; 
+} sensor_wire_type_t;
+
 sensor_wire_type_t get_current_sensor_wire_type(void);
 void set_current_sensor_wire_type(sensor_wire_type_t wire_type);

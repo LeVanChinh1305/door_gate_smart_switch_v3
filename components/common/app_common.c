@@ -10,14 +10,15 @@
  * @param   eStatus: trạng thái nghiệp vụ cần quy đổi
  * @return  esp_err_t: trạng thái lỗi tương ứng gần nhất với eStatus 
  */
-esp_err_t app_common_StatusToEspErr(e_app_status_t eStatus){
+esp_err_t app_common_StatusToEspErr(e_app_status_t eStatus)
+{
     esp_err_t eRet = ESP_OK;
-    switch(eStatus){
+    switch (eStatus) {
         case E_APP_STATUS_SUCCESS:
             eRet = ESP_OK;
             break;
         case E_APP_STATUS_NO_CHANGE:
-            eRet = ESP_OK; 
+            eRet = ESP_OK;
             break;
         case E_APP_STATUS_BUSY:
             eRet = ESP_ERR_INVALID_STATE;
@@ -51,10 +52,11 @@ esp_err_t app_common_StatusToEspErr(e_app_status_t eStatus){
             break;
         case E_APP_STATUS_INTERNAL_ERROR:
             eRet = ESP_FAIL;
-            break;        
-        default: // bao gồm cả trường hợp E_APP_STATUS_UNKNOWN
-            eRet = ESP_FAIL; 
-            break; 
+            break;
+        // bao gồm cả trường hợp E_APP_STATUS_UNKNOWN
+        default:
+            eRet = ESP_FAIL;
+            break;
     }
     return eRet;
-}
+}

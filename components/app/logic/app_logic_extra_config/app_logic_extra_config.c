@@ -59,9 +59,7 @@ void app_logic_extra_config_ApplyLedConfig(void)
     /* 4. Đẩy lệnh đổi màu toàn bộ dải LED vào Queue */
     (void)app_logic_led_SetColor(sColor);
 
-    ESP_LOGI(TAG, "Cập nhật LED thành công: Brightness=%d%% (%d/255), RGB=0x%06X (relay=%s)",
-             g_sExtraConfig.led_lightness, u8Bright255, (unsigned int)u32CurrentColorVal,
-             app_relay_state_ToString(eRelayState));
+    ESP_LOGI(TAG, "Cập nhật LED thành công: Brightness=%d%% (%d/255), RGB=0x%06X (relay=%s)", g_sExtraConfig.led_lightness, u8Bright255, (unsigned int)u32CurrentColorVal, app_relay_state_ToString(eRelayState));
 }
 
 static void handle_cmd_led_enable(const cJSON *pValue, bool *pbConfigChanged)
@@ -240,12 +238,11 @@ void app_logic_extra_config_ScheduleNextRFLock(void)
     }
 
     /* Bảo đảm khoảng delay tối thiểu là 1 giây */
-    if (u32NextDelaySec == 0) u32NextDelaySec = 1;
+    if (u32NextDelaySec == 0) {
+        u32NextDelaySec = 1;
+    }
 
-    ESP_LOGI(TAG, "Lập lịch Timer Khóa RF thành công: Thức dậy sau %u giây (%u giờ %u phút)",
-             (unsigned int)u32NextDelaySec, 
-             (unsigned int)(u32NextDelaySec / 3600), 
-             (unsigned int)((u32NextDelaySec % 3600) / 60));
+    ESP_LOGI(TAG, "Lập lịch Timer Khóa RF thành công: Thức dậy sau %u giây (%u giờ %u phút)", (unsigned int)u32NextDelaySec, (unsigned int)(u32NextDelaySec / 3600), (unsigned int)((u32NextDelaySec % 3600) / 60));
 
     /* 5. Khởi tạo hoặc khởi động lại Timer với chu kỳ mới */
     if (g_hLockRFTimer == NULL) {
@@ -293,11 +290,7 @@ void app_logic_extra_config_ProcessGet(char *pcOutBuffer, size_t zMaxLen)
         "\"gate_2_led_off\":%d,"
         "\"gate_2_rgb_on\":%lu,"
         "\"gate_2_rgb_off\":%lu,",
-        acMac,
-        g_sExtraConfig.buzzerEnb, g_sExtraConfig.ledEnb, g_sExtraConfig.ledRgbOn, g_sExtraConfig.ledRgbOff, g_sExtraConfig.led_lightness,
-        g_sExtraConfig.gate_1_type, g_sExtraConfig.gate_1_control_mode, g_sExtraConfig.gate_1_led_off, g_sExtraConfig.gate_1_rgb_on, g_sExtraConfig.gate_1_rgb_off,
-        g_sExtraConfig.gate_2_type, g_sExtraConfig.gate_2_control_mode, g_sExtraConfig.gate_2_led_off, g_sExtraConfig.gate_2_rgb_on, g_sExtraConfig.gate_2_rgb_off
-    );
+        acMac, g_sExtraConfig.buzzerEnb, g_sExtraConfig.ledEnb, g_sExtraConfig.ledRgbOn, g_sExtraConfig.ledRgbOff, g_sExtraConfig.led_lightness, g_sExtraConfig.gate_1_type, g_sExtraConfig.gate_1_control_mode, g_sExtraConfig.gate_1_led_off, g_sExtraConfig.gate_1_rgb_on, g_sExtraConfig.gate_1_rgb_off, g_sExtraConfig.gate_2_type, g_sExtraConfig.gate_2_control_mode, g_sExtraConfig.gate_2_led_off, g_sExtraConfig.gate_2_rgb_on, g_sExtraConfig.gate_2_rgb_off);
 
     /* ĐỢT 2: Cấu hình Cổng 3, Ban đêm & Cảnh báo */
     if (iOffset > 0 && (size_t)iOffset < zMaxLen) {
@@ -317,11 +310,7 @@ void app_logic_extra_config_ProcessGet(char *pcOutBuffer, size_t zMaxLen)
             "\"switch_1_lightness\":%d,"
             "\"switch_2_lightness\":%d,"
             "\"switch_3_lightness\":%d,",
-            g_sExtraConfig.gate_3_type, g_sExtraConfig.gate_3_control_mode, g_sExtraConfig.gate_3_led_off, g_sExtraConfig.gate_3_rgb_on, g_sExtraConfig.gate_3_rgb_off,
-            g_sExtraConfig.nightModeEnb, g_sExtraConfig.nightBegin, g_sExtraConfig.nightEnd, g_sExtraConfig.nightTz,
-            g_sExtraConfig.warningEnb, g_sExtraConfig.warningBegin, g_sExtraConfig.warningEnd,
-            g_sExtraConfig.switch_1_lightness, g_sExtraConfig.switch_2_lightness, g_sExtraConfig.switch_3_lightness
-        );
+            g_sExtraConfig.gate_3_type, g_sExtraConfig.gate_3_control_mode, g_sExtraConfig.gate_3_led_off, g_sExtraConfig.gate_3_rgb_on, g_sExtraConfig.gate_3_rgb_off, g_sExtraConfig.nightModeEnb, g_sExtraConfig.nightBegin, g_sExtraConfig.nightEnd, g_sExtraConfig.nightTz, g_sExtraConfig.warningEnb, g_sExtraConfig.warningBegin, g_sExtraConfig.warningEnd, g_sExtraConfig.switch_1_lightness, g_sExtraConfig.switch_2_lightness, g_sExtraConfig.switch_3_lightness);
         if (iNext > 0) {
             iOffset += iNext;
         }
@@ -342,10 +331,7 @@ void app_logic_extra_config_ProcessGet(char *pcOutBuffer, size_t zMaxLen)
             "\"lockRFBegin\":%lu,"
             "\"lockRFEnd\":%lu"
             "}",
-            g_sExtraConfig.anti_animal_enb, g_sExtraConfig.anti_animal_lock_time, g_sExtraConfig.gate_countdown,
-            g_sExtraConfig.sgmCycle, g_sExtraConfig.sgmCycleGap, g_sExtraConfig.sgmUseCycleGap,
-            g_sExtraConfig.resetMode, g_sExtraConfig.wlanMode, g_sExtraConfig.lockRFEnb, g_sExtraConfig.lockRFBegin, g_sExtraConfig.lockRFEnd
-        );
+            g_sExtraConfig.anti_animal_enb, g_sExtraConfig.anti_animal_lock_time, g_sExtraConfig.gate_countdown, g_sExtraConfig.sgmCycle, g_sExtraConfig.sgmCycleGap, g_sExtraConfig.sgmUseCycleGap, g_sExtraConfig.resetMode, g_sExtraConfig.wlanMode, g_sExtraConfig.lockRFEnb, g_sExtraConfig.lockRFBegin, g_sExtraConfig.lockRFEnd);
     }
 }
 

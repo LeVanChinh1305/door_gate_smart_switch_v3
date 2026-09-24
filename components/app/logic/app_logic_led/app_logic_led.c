@@ -78,8 +78,7 @@ static esp_err_t app_logic_led_SendItem(const app_logic_led_queue_item_t *pItem)
     if (!g_bIsReady || g_hLedCommandQueue == NULL || g_hLedTask == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
-    return xQueueSend(g_hLedCommandQueue, pItem, 0U) == pdPASS
-               ? ESP_OK : ESP_ERR_TIMEOUT;
+    return xQueueSend(g_hLedCommandQueue, pItem, 0U) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
 /**
@@ -95,22 +94,13 @@ esp_err_t app_logic_led_Init(void)
     if (eErr != ESP_OK) {
         return eErr;
     }
-    g_hLedCommandQueue = xQueueCreate(DF_APP_LOGIC_LED_QUEUE_LENGTH,
-                                       sizeof(app_logic_led_queue_item_t));
+    g_hLedCommandQueue = xQueueCreate(DF_APP_LOGIC_LED_QUEUE_LENGTH, sizeof(app_logic_led_queue_item_t));
     if (g_hLedCommandQueue == NULL) {
         return ESP_ERR_NO_MEM;
     }
 
     /* Tạo Task Tĩnh (Static Task) - Không tốn 1 byte Heap động nào */
-    g_hLedTask = xTaskCreateStatic(
-        app_logic_led_Task,
-        "led_logic",
-        DF_TASK_STACK_MIN,
-        NULL,
-        DF_TASK_PRIO_CRITICAL, // 5
-        s_au8LedTaskStack,
-        &s_sLedTaskTCB
-    );
+    g_hLedTask = xTaskCreateStatic(app_logic_led_Task, "led_logic", DF_TASK_STACK_MIN, NULL, DF_TASK_PRIO_CRITICAL, s_au8LedTaskStack, &s_sLedTaskTCB);
 
     if (g_hLedTask == NULL) {
         vQueueDelete(g_hLedCommandQueue);

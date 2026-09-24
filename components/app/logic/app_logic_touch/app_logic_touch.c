@@ -38,9 +38,11 @@ static volatile bool s_bReconfigTaskPending = false;
 #define DF_CANCEL_HOLD_MS       (800U)  /* Giữ tối thiểu 800ms mới coi là chủ ý hủy, chống nhiễu/bounce */
 #define DF_CANCEL_POLL_PERIOD_MS (50U) 
 
-static void app_logic_touch_DelayedReconfigRestartTask(void *pvParameters) {
+static void app_logic_touch_DelayedReconfigRestartTask(void *pvParameters)
+{
     uint8_t u8Flag = (uint8_t)(uintptr_t)pvParameters;
-    vTaskDelay(pdMS_TO_TICKS(300)); /* Cho LED/buzzer kịp phản hồi trước khi mất nguồn Bluetooth/Wifi cũ */
+    /* Cho LED/buzzer kịp phản hồi trước khi mất nguồn Bluetooth/Wifi cũ */
+    vTaskDelay(pdMS_TO_TICKS(300));
     (void)app_nvs_SaveReconfigFlag(u8Flag);
     ESP_LOGI(TAG, "Ghi cờ reconfig=%u -> Khởi động lại...", (unsigned)u8Flag);
     esp_restart();
@@ -108,8 +110,7 @@ static void app_logic_touch_Task(void *pArg)
                         app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
                         if (!s_bReconfigTaskPending) {
                             s_bReconfigTaskPending = true;
-                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_udp",
-                                        DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
+                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_udp", DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_UDP, 5, NULL);
                         }
                     }
                     if (u32HeldMs >= 5000U) {
@@ -121,8 +122,7 @@ static void app_logic_touch_Task(void *pArg)
                         /* 2. Tạo task delay nhỏ rồi ghi cờ & esp_restart() */
                         if (!s_bReconfigTaskPending) {
                             s_bReconfigTaskPending = true;
-                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_mesh",
-                                        DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_BLE_MESH, 5, NULL);
+                            xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_mesh", DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_BLE_MESH, 5, NULL);
                         }
                     }
                     else if (u32HeldMs >= DF_TOUCH_HOLD_3S_MS) {
@@ -141,8 +141,7 @@ static void app_logic_touch_Task(void *pArg)
                             app_led_state_SetState(E_LED_STATE_BLUFI_AUTO);
                             if (!s_bReconfigTaskPending) {
                                 s_bReconfigTaskPending = true;
-                                xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_blufi",
-                                            DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_BLUFI, 5, NULL);
+                                xTaskCreate(app_logic_touch_DelayedReconfigRestartTask, "reconf_blufi", DF_TASK_STACK_SMALL, (void *)(uintptr_t)E_APP_RECONFIG_BLUFI, 5, NULL);
                             }
                         }
                     } 
@@ -233,7 +232,7 @@ esp_err_t app_logic_touch_Init(void)
         return ESP_ERR_NO_MEM;
     }
 
-    if (xTaskCreate(app_logic_touch_Task, "touch_logic",DF_TASK_STACK_NETWORK, NULL,DF_TASK_PRIO_NORMAL, &g_hTouchTask) != pdPASS) {
+    if (xTaskCreate(app_logic_touch_Task, "touch_logic", DF_TASK_STACK_NETWORK, NULL, DF_TASK_PRIO_NORMAL, &g_hTouchTask) != pdPASS) {
         vQueueDelete(g_hTouchCommandQueue);
         g_hTouchCommandQueue = NULL;
         return ESP_ERR_NO_MEM;
@@ -258,7 +257,6 @@ esp_err_t app_logic_touch_SendCommand(e_app_logic_touch_cmd_t eCommand)
     }
     return xQueueSend(g_hTouchCommandQueue, &eCommand, 0U) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT;
 }
-
 
 static void app_logic_touch_CancelConfigTask(void *pArg)
 {
@@ -292,7 +290,8 @@ static void app_logic_touch_CancelConfigTask(void *pArg)
             if (u32HeldMs >= DF_CANCEL_HOLD_MS) {
                 ESP_LOGW(TAG, ">>> Nút vật lý giữ đủ lâu -> HỦY cấu hình, khởi động lại...");
                 (void)app_nvs_SaveReconfigFlag(E_APP_RECONFIG_NONE);
-                vTaskDelay(pdMS_TO_TICKS(100)); /* cho log kịp flush */
+                /* cho log kịp flush */
+                vTaskDelay(pdMS_TO_TICKS(100));
                 esp_restart();
             }
         }
@@ -306,16 +305,15 @@ static void app_logic_touch_CancelConfigTask(void *pArg)
     }
 }
 
-
 esp_err_t app_logic_touch_InitCancelConfigMode(void)
 {
-    esp_err_t eErr = app_touch_Init();   /* Vẫn cần init driver CY8CMBR3108 để đọc được nút */
+    /* Vẫn cần init driver CY8CMBR3108 để đọc được nút */
+    esp_err_t eErr = app_touch_Init();
     if (eErr != ESP_OK) {
         return eErr;
     }
 
-    if (xTaskCreate(app_logic_touch_CancelConfigTask, "touch_cancel_cfg",
-                     DF_TASK_STACK_NETWORK, NULL, DF_TASK_PRIO_NORMAL, NULL) != pdPASS) {
+    if (xTaskCreate(app_logic_touch_CancelConfigTask, "touch_cancel_cfg", DF_TASK_STACK_NETWORK, NULL, DF_TASK_PRIO_NORMAL, NULL) != pdPASS) {
         return ESP_ERR_NO_MEM;
     }
 

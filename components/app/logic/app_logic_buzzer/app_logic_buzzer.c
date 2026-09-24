@@ -87,8 +87,7 @@ static esp_err_t app_logic_buzzer_SendItem(const app_logic_buzzer_queue_item_t *
     if (!g_bIsReady || g_hBuzzerCommandQueue == NULL || g_hBuzzerTask == NULL) {
         return ESP_ERR_INVALID_STATE;
     }
-    return xQueueSend(g_hBuzzerCommandQueue, pItem, 0U) == pdPASS
-               ? ESP_OK : ESP_ERR_TIMEOUT;
+    return xQueueSend(g_hBuzzerCommandQueue, pItem, 0U) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT;
 }
 
 /**
@@ -110,15 +109,7 @@ esp_err_t app_logic_buzzer_Init(void)
     }
 
     /* Tạo Task Tĩnh (Static Task) - Không chiếm 1 byte Free Heap nào */
-    g_hBuzzerTask = xTaskCreateStatic(
-        app_logic_buzzer_Task,
-        "buzzer_logic",
-        DF_TASK_STACK_MIN,
-        NULL,
-        DF_APP_LOGIC_BUZZER_TASK_PRIORITY,
-        s_au8BuzzerTaskStack,
-        &s_sBuzzerTaskTCB
-    );
+    g_hBuzzerTask = xTaskCreateStatic(app_logic_buzzer_Task, "buzzer_logic", DF_TASK_STACK_MIN, NULL, DF_APP_LOGIC_BUZZER_TASK_PRIORITY, s_au8BuzzerTaskStack, &s_sBuzzerTaskTCB);
 
     if (g_hBuzzerTask == NULL) {
         vQueueDelete(g_hBuzzerCommandQueue);
