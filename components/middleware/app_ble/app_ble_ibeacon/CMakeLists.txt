@@ -6,5 +6,6 @@ idf_component_register(
     REQUIRES 
         bt
         app_ble_manager
-        app_logic_ble_ibeacon
+        app_nvs
+        mbedtls
 )

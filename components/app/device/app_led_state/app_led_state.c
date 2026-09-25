@@ -113,14 +113,6 @@ static void app_led_state_Task(void *pArg) {
       }
       vTaskDelay(pdMS_TO_TICKS(200U));
       break;
-    case E_LED_STATE_CONNECT_BLE_MESH:
-      if (bToggle) {
-        (void)app_logic_led_SetColor(APP_LED_COLOR_YELLOW);
-      } else {
-        (void)app_logic_led_SetColor(APP_LED_COLOR_OFF);
-      }
-      vTaskDelay(pdMS_TO_TICKS(200U));
-      break;
     case E_LED_STATE_GATE_UP: {
       // Relay OPEN đang bật: LED OPEN (pixel 2) = màu bật, 2 LED còn lại = màu
       // tắt

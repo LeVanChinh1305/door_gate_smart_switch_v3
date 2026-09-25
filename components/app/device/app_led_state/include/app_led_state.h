@@ -14,7 +14,6 @@ typedef enum {
     E_LED_STATE_NORMAL_IDLE,        // Trạng thái bình thường / Chờ lệnh kết nối
     E_LED_STATE_BLUFI_AUTO,         // Chế độ kết nối tự động (BluFi - Giữ 3s): Nhấp nháy xanh dương
     E_LED_STATE_CONNECT_MANUAL,     // Chế độ kết nối thủ công (Giữ 7s): Nhấp nháy đỏ
-    E_LED_STATE_CONNECT_BLE_MESH,   // chế độ kết nối ble
     E_LED_STATE_NORMAL,             // Chế độ đã kết nối, hoạt động bình thường
     E_LED_STATE_LOCKED,             // Trạng thái khóa tạm thời
     E_LED_STATE_LOCKED_CHILD,       // Khóa trẻ em

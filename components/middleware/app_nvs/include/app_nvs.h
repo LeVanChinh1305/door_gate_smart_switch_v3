@@ -185,8 +185,10 @@ esp_err_t app_nvs_ClearExtraConfig(void);
 
 /**
  * @brief Khai báo prototype hàm gán giá trị ExtraConfig mặc định
+ * @param config Con trỏ tới cấu trúc ExtraConfig
+ * @return esp_err_t ESP_OK nếu thành công, ESP_ERR_INVALID_ARG nếu config == NULL
  */
-void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config);
+esp_err_t app_nvs_SetDefaultExtraConfig(app_extra_config_t *config);
 
 
 typedef struct {
@@ -210,7 +212,6 @@ typedef enum {
     E_APP_RECONFIG_NONE   = 0,  // Chạy bình thường (NORMAL hoặc IDLE)
     E_APP_RECONFIG_BLUFI  = 1,  // Boot vào chế độ cấu hình BluFi
     E_APP_RECONFIG_UDP    = 2,  // Boot vào chế độ cấu hình UDP
-    E_APP_RECONFIG_BLE_MESH = 3, // Boot vào chế độ ble-mesh 
 } e_app_reconfig_flag_t;
 
 // Đọc cờ reconfig từ NVS (mặc định trả về E_APP_RECONFIG_NONE nếu chưa từng ghi)

@@ -12,7 +12,7 @@
 #include "app_logic_mqtt_publisher.h"
 #include <string.h>
 #include "app_common.h"
-#include "app_ble_mesh.h"
+#include "app_logic_ble_ibeacon.h"
 
 static const char *TAG = "APP_OTA";
 
@@ -218,11 +218,11 @@ esp_err_t app_ota_ProcessCmdStartOta(const cJSON *jsValue)
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "OTA task đã tạo → dừng BLE để giải phóng RAM");
+    ESP_LOGI(TAG, "OTA task đã tạo → dừng BLE iBeacon để giải phóng RAM");
 
-    esp_err_t eBleRet = app_ble_mesh_Deinit();
+    esp_err_t eBleRet = app_logic_ble_ibeacon_Deinit();
     if (eBleRet != ESP_OK) {
-        ESP_LOGW(TAG, "Dừng BLE thất bại: %s",esp_err_to_name(eBleRet));
+        ESP_LOGW(TAG, "Dừng BLE thất bại: %s", esp_err_to_name(eBleRet));
     }
 
     return ESP_OK;

@@ -276,7 +276,10 @@ bool app_nvs_IsProvisionedDeviceConfig(void) {
 
 // extra config functions
 
-void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config) {
+esp_err_t app_nvs_SetDefaultExtraConfig(app_extra_config_t *config) {
+  DF_CHECK_NULL_PARAM(config); 
+
+  memset(config, 0, sizeof(app_extra_config_t));
   config->buzzerEnb = 0;
   config->ledEnb = 1;
   config->ledRgbOn = 16711680;
@@ -326,6 +329,7 @@ void app_nvs_SetDefaultExtraConfig(app_extra_config_t *config) {
   config->lockRFEnb = 0;
   config->lockRFBegin = 1638928504;
   config->lockRFEnd = 1638928504;
+  return ESP_OK;
 }
 
 esp_err_t app_nvs_SaveExtraConfig(const app_extra_config_t *config) {
@@ -536,6 +540,8 @@ esp_err_t app_nvs_DeleteAllSchedules(void) {
 }
 
 esp_err_t app_nvs_GetAllSchedules(app_schedule_item_t *pasSchedules,uint8_t *pu8Count) {
+  DF_CHECK_NULL_PARAM(pasSchedules);
+  DF_CHECK_NULL_PARAM(pu8Count);
   *pu8Count = 0;
   nvs_handle_t xNvsHandle;
   esp_err_t eErr =

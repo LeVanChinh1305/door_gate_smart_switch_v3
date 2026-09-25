@@ -116,9 +116,12 @@ static void handle_cmd_reset_all(const cJSON *pValue, bool *pbConfigChanged)
 {
     if (cJSON_GetObjectItem(pValue, "resetAll") != NULL) {
         ESP_LOGI(TAG, "-> LỆNH KHÔI PHỤC CẤU HÌNH MẶC ĐỊNH (resetAll)");
-        app_nvs_SetDefaultExtraConfig(&g_sExtraConfig);
-        app_logic_extra_config_ApplyLedConfig();
-        *pbConfigChanged = true;
+        if (app_nvs_SetDefaultExtraConfig(&g_sExtraConfig) == ESP_OK) {
+            app_logic_extra_config_ApplyLedConfig();
+            *pbConfigChanged = true;
+        } else {
+            ESP_LOGE(TAG, "Lỗi khi khôi phục cấu hình mặc định!");
+        }
     }
 }
 

@@ -21,7 +21,6 @@
 #include "app_logic_schedule.h"
 #include "app_logic_extra_config.h"
 #include "app_udp.h"
-#include "app_ble_mesh.h"
 #include "app_logic_ble_ibeacon.h"
 
 static const char *TAG = "APP_MAIN";
@@ -94,16 +93,6 @@ static void app_main_RunConfigMode(uint8_t u8Flag)
             ESP_LOGW(TAG, "Init Wi-Fi STA cho BluFi gặp sự cố: %s", esp_err_to_name(eWifiRet));
         }
         (void)app_blufi_Init();
-    }else if (u8Flag == E_APP_RECONFIG_BLE_MESH) {
-        /* NHÁNH MỚI: CHẾ ĐỘ BLE MESH PAIRING */
-        ESP_LOGI(TAG, "-> Kích hoạt BLE Mesh Pairing (Gateway Plus Scanning)...");
-        app_led_state_SetState(E_LED_STATE_CONNECT_BLE_MESH);
-        
-        /* Khởi tạo phát quảng bá Mesh Proxy Service 0x1828 */
-        esp_err_t eMeshErr = app_ble_mesh_Init();
-        if (eMeshErr != ESP_OK) {
-            ESP_LOGE(TAG, "Khởi tạo BLE Mesh thất bại: %s", esp_err_to_name(eMeshErr));
-        }
     } else if (u8Flag == E_APP_RECONFIG_UDP) {
         app_led_state_SetState(E_LED_STATE_CONNECT_MANUAL);
         (void)app_udp_Init();
@@ -114,7 +103,7 @@ static void app_main_RunConfigMode(uint8_t u8Flag)
     ESP_LOGI(TAG, "=== HỆ THỐNG ĐÃ VÀO CHẾ ĐỘ CẤU HÌNH ===");
     ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
-    /* Vòng lặp riêng cho chế độ config — không có BLE Mesh/UDP/MQTT dance,
+    /* Vòng lặp riêng cho chế độ config,
        vì mọi chuyển đổi mode khác đều đi qua esp_restart() từ nơi khác */
     while (true) {
         esp_task_wdt_reset();
@@ -242,11 +231,7 @@ void app_main(void) {
       app_device_state_SetModeBit(DEVICE_MODE_NORMAL, true);
       app_led_state_SetState(E_LED_STATE_LOCKED);
 
-      /* Init BLE Mesh SỚM, ngay khi heap còn sạch nhất, TRƯỚC Wi-Fi STA/TLS/MQTT
-         -> tránh Malloc failed do heap phân mảnh (xem log crash trước đó) */
-      ESP_LOGI(TAG, "Khởi tạo BLE Mesh sớm (heap còn sạch)...");
-      //(void)app_ble_mesh_Init();
-      /* 2. Khởi tạo BLE iBeacon Async Logic thay thế cho BLE Mesh cũ */
+      /* Khởi tạo BLE iBeacon Async Logic */
       ESP_LOGI(TAG, "Khởi tạo BLE iBeacon Gate Control sớm (heap còn sạch)...");
       (void)app_logic_ble_ibeacon_Init();
 
@@ -271,11 +256,10 @@ void app_main(void) {
   /* Đăng ký task chính app_main vào TWDT sau khi hoàn tất khởi động mạng và các module */
   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
 
-  /* Vòng lặp chính giờ RẤT ĐƠN GIẢN — không còn init/deinit BLE Mesh/BluFi/UDP
-     động theo bitmask nữa, vì mọi chuyển mode (CONNECT_AUTO/CONNECT_MANUAL)
-     giờ đi qua u8ReconfigFlag + esp_restart(), xử lý ở app_logic_touch.c và
-     app_main_RunConfigMode() phía trên — không còn xảy ra tại runtime trong
-     nhánh NORMAL này nữa. */
+  /* Vòng lặp chính đơn giản — mọi chuyển mode (CONNECT_AUTO/CONNECT_MANUAL)
+     đi qua u8ReconfigFlag + esp_restart(), xử lý ở app_logic_touch.c và
+     app_main_RunConfigMode() phía trên — không xảy ra tại runtime trong
+     nhánh NORMAL này. */
   while (true) {
     esp_task_wdt_reset();
     vTaskDelay(pdMS_TO_TICKS(1000U));

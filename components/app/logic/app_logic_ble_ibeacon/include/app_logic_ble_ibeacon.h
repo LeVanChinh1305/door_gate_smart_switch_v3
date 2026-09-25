@@ -1,3 +1,10 @@
+/**
+ * @file    app_logic_ble_ibeacon.h
+ * @brief   Tầng logic xử lý và phân phối lệnh BLE iBeacon (Gate/Door Switch)
+ *
+ * @note    Header chỉ chứa khai báo nguyên mẫu hàm công khai.
+ */
+
 #ifndef APP_LOGIC_BLE_IBEACON_H
 #define APP_LOGIC_BLE_IBEACON_H
 
@@ -9,7 +16,7 @@ extern "C" {
 
 /**
  * @brief  Khởi tạo module Logic BLE iBeacon (Tạo Task và Queue)
- * @return esp_err_t ESP_OK nếu thành công
+ * @return esp_err_t ESP_OK nếu thành công, lỗi khác nếu thất bại
  */
 esp_err_t app_logic_ble_ibeacon_Init(void);
 
